@@ -1,0 +1,72 @@
+/**
+ * GPU-compressed copies of the big textures: the surface sets (public/assets/tex/*.webp)
+ * become KTX2 (Basis Universal) files that the game transcodes to the GPU's
+ * own format (ASTC, ETC2, BC7…) instead of unpacking to raw RGBA: a 1024² texture costs the GPU
+ * 0.7–1.4 MB instead of 5.3 MB. The .webp files stay the source and the fallback.
+ *
+ *   public/assets/tex/<set>_<kind>.ktx2       1024², for Medium and High
+ *   public/assets/tex/low/<set>_<kind>.ktx2   512², for Low (phones' default)
+ *
+ * Every file is ETC1S (small files, 4 bpp on phones); normal maps are ETC1S tuned for normals
+ * (`-normal_map -mip_renorm`). UASTC + Zstandard keeps normals a little cleaner but costs 2.8× the
+ * download (4.5 MB against 1.6 MB for the Low set); side by side on the maps the difference does not
+ * show, and phones' first download has to stay small (CrazyGames' mobile limit is 20 MB). Every file has
+ * mipmaps and is stored bottom-up (`-y_flip`), as WebGL samples it, so it lines up with the .webp.
+ * Sizes are powers of two, which every compressed format accepts at every mip level.
+ *
+ * It also copies three's Basis transcoder (node_modules/three/examples/jsm/libs/basis) into
+ * public/assets/basis, so it is versioned and cached like any asset; re-run after updating three.
+ *
+ * Needs `basisu` from Basis Universal 2.x (its -quality and -effort options; tested with 2.50, `brew install basis_universal`).
+ * Run: bun tools/make-ktx2.ts [name …]   (names: a set like `brick`; none = everything)
+ */
+import sharp from 'sharp';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+
+const ROOT = join(import.meta.dir, '..');
+const ASSETS = join(ROOT, 'public/assets');
+const SETS = ['concrete', 'metalplate', 'container', 'brick', 'planks', 'corrugated', 'plaster', 'cobble', 'moss', 'asphalt', 'sidewalk', 'floortile', 'facadetile',
+  'sand', 'cliff', 'dirt', 'snow', 'icerock', 'lichen', 'path'];
+
+const ETC1S = ['-etc1s', '-quality', '100', '-effort', '5'];
+const ETC1S_NORMAL = [...ETC1S, '-normal_map', '-mip_renorm'];
+
+interface Job { name: string; src: string; out: string; width: number; height: number; args: string[] }
+const jobs: Job[] = [];
+for (const set of SETS) for (const kind of ['diff', 'nor', 'rough'] as const) {
+  const src = join(ASSETS, `tex/${set}_${kind}.webp`);
+  const codec = kind === 'nor' ? ETC1S_NORMAL : kind === 'rough' ? [...ETC1S, '-linear'] : [...ETC1S, '-srgb'];
+  jobs.push({ name: set, src, out: join(ASSETS, `tex/${set}_${kind}.ktx2`), width: 1024, height: 1024, args: codec });
+  jobs.push({ name: set, src, out: join(ASSETS, `tex/low/${set}_${kind}.ktx2`), width: 512, height: 512, args: codec });
+}
+
+if (spawnSync('basisu', ['-version']).status !== 0) {
+  console.error('basisu not found: install Basis Universal (`brew install basis_universal`, or build https://github.com/BinomialLLC/basis_universal).');
+  process.exit(1);
+}
+const only = process.argv.slice(2);
+const todo = jobs.filter(j => !only.length || only.includes(j.name));
+const tmp = mkdtempSync(join(tmpdir(), 'make-ktx2-'));
+
+async function run(job: Job, i: number) {
+  // basisu reads PNG, not WebP: resize (Lanczos) into a temporary PNG first.
+  const png = join(tmp, `${i}.png`);
+  await sharp(job.src).resize(job.width, job.height, { fit: 'fill' }).png().toFile(png);
+  mkdirSync(dirname(job.out), { recursive: true });
+  const proc = Bun.spawn(['basisu', ...job.args, '-mipmap', '-y_flip', '-ktx2', png, '-output_file', job.out], { stdout: 'pipe', stderr: 'pipe' });
+  if (await proc.exited !== 0) throw new Error(`basisu failed on ${job.out}:\n${await new Response(proc.stdout).text()}\n${await new Response(proc.stderr).text()}`);
+  console.log(`${job.out.slice(ASSETS.length + 1)}  ${job.width}×${job.height}  ${(statSync(job.out).size / 1024).toFixed(0)} KB`);
+}
+
+// basisu threads itself; a few files at once keeps every core busy through the single-threaded parts.
+let next = 0;
+await Promise.all(Array.from({ length: 3 }, async () => { while (next < todo.length) { const i = next++; await run(todo[i], i); } }));
+rmSync(tmp, { recursive: true, force: true });
+
+const basis = join(ROOT, 'node_modules/three/examples/jsm/libs/basis');
+mkdirSync(join(ASSETS, 'basis'), { recursive: true });
+for (const f of ['basis_transcoder.js', 'basis_transcoder.wasm']) copyFileSync(join(basis, f), join(ASSETS, 'basis', f));
+console.log('copied the Basis transcoder to public/assets/basis');

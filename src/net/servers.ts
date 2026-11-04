@@ -1,0 +1,165 @@
+import type { Key } from '../ui/i18n';
+import { serverIdentityKey, serverRegionKey } from './ping';
+
+/**
+ * The game servers a player can choose (Settings → Server, or `?server=tw|us` for one visit). Each
+ * is a SpacetimeDB database running the same module, so this client plays on any of them:
+ *
+ * - `tw`, the default: this build's own server (VITE_SPACETIMEDB_URI / _DATABASE, which `?stdb=` and
+ *   `?db=` override). In production that is the self-hosted server in Taipei; a `dev` preview's is
+ *   the Maincloud development database, a local build's the dev server's proxy ("Dev server").
+ * - `us`: US East, the Maincloud database that was production before Singapore (which was itself retired as a choice for players). It stays published,
+ *   and players from that time find their saved identity and career there.
+ *
+ * A new player in the Americas, Europe or Africa starts on US East (`regionServer`): Taipei is 300–400 ms
+ * away from there, US East about 40–160 ms.
+ *
+ * Each server keeps its own stats: the saved identity is keyed by server (`serverIdentityKey`; Taipei
+ * keeps the one Singapore had) and the career stats live in that server's database. The choice is saved (`lawbreaker.server`); the
+ * lobby switches at once, a match in progress stays on its server and the next one uses the choice.
+ */
+export type ServerId = 'tw' | 'us';
+
+export interface GameServer {
+  id: ServerId;
+  /** The choice's name: "Taipei", "US East", or "Dev server" for a development build's own server. */
+  label: Key;
+  uri: string;
+  database: string;
+  /** Where it runs ("Taipei", "US East", "Local") when its host is a known one. */
+  region?: Key;
+}
+
+export const MAINCLOUD = 'wss://maincloud.spacetimedb.com';
+/** US East, spelled as production builds had it: a saved identity there is keyed by this URI. */
+export const US_EAST = { uri: MAINCLOUD, database: '3d-game-c4lhd' } as const;
+
+const trimUri = (uri: string) => uri.replace(/\/+$/, '').toLowerCase();
+export const sameServer = (a: { uri: string; database: string }, b: { uri: string; database: string }) =>
+  a.database === b.database && trimUri(a.uri) === trimUri(b.uri);
+
+type Env = Record<string, string | undefined>;
+export interface BuildServer { uri?: string; database?: string }
+
+/**
+ * This build's server: the build variables, or `?stdb=` / `?db=` from the URL. "same-origin" routes
+ * the websocket through the page's own host at /stdb (the dev server proxies it); the trailing slash
+ * matters, as the SDK resolves 'v1/...' against it.
+ */
+export function buildServer(env: Env, page: { search: string; protocol: string; host: string }): BuildServer {
+  const params = new URLSearchParams(page.search);
+  let uri = params.get('stdb') ?? env.VITE_SPACETIMEDB_URI;
+  const database = params.get('db') ?? env.VITE_SPACETIMEDB_DATABASE;
+  if (uri === 'same-origin') uri = `${page.protocol === 'https:' ? 'wss' : 'ws'}://${page.host}/stdb/`;
+  return { uri: uri || undefined, database: database || undefined };
+}
+
+/**
+ * The choices: the build's server first (Taipei in production), then US East. A build without a server
+ * offers none (online play is off, and local development never lands on production by itself); a build
+ * that is itself on US East offers just that. (Singapore, production before Taipei, is no longer offered:
+ * `?stdb=` / `?db=` can still point a build at any server, which then shows as the "Dev server".)
+ */
+export function gameServers(build: BuildServer): GameServer[] {
+  if (!build.uri || !build.database) return [];
+  const us: GameServer = { id: 'us', label: 'server.region.usEast', uri: US_EAST.uri, database: US_EAST.database, region: 'server.region.usEast' };
+  if (sameServer({ uri: build.uri, database: build.database }, US_EAST)) return [{ ...us, uri: build.uri }];
+  const region = serverRegionKey(build.uri);
+  const own: GameServer = { id: 'tw', label: region === 'server.region.taipei' ? region : 'server.choice.dev', uri: build.uri, database: build.database, region };
+  return [own, us];
+}
+
+/** Where the choice is saved (localStorage). */
+export const SERVER_KEY = 'lawbreaker.server';
+/** The storage calls used (localStorage, or a stand-in in tests); either may throw when storage is blocked. */
+export interface KeyValue { getItem(key: string): string | null; setItem(key: string, value: string): void }
+
+/**
+ * The default server for a browser time zone, before any choice: US East for the Americas, Europe
+ * (Istanbul and Moscow included) and Africa, whose players reach Taipei at 300–400 ms; Taipei for
+ * Asia, Oceania and anything unknown. Legacy zone names (US/…, Brazil/…) count with their region.
+ */
+export function regionServer(tz: string): ServerId {
+  return /^(America|Europe|Africa|Atlantic|US|Canada|Brazil|Mexico|Chile)\//.test(tz) || tz === 'Cuba' || tz === 'Jamaica' ? 'us' : 'tw';
+}
+
+/**
+ * The server to use: `?server=tw|us` (this visit only, never saved), else the server of the friend's room
+ * the page was opened for (`link`, this visit only), else the saved choice, else (on
+ * the production list, Taipei first) the server for the time zone (`regionServer`) unless the player
+ * already has a Taipei identity, which keeps their career where it is; else the first (the build's own).
+ * The default is not saved (only written over an unknown saved id), so a choice in Settings is what pins
+ * a server. An id that is not on the list (a typo, or `sg` saved when Singapore was a choice) is skipped, and a saved
+ * one is rewritten to the default so it is not looked up again.
+ */
+export function chooseServer(list: readonly GameServer[], search: string, storage: KeyValue | undefined, tz = '', link?: ServerId): GameServer | undefined {
+  const asked = new URLSearchParams(search).get('server')?.trim().toLowerCase();
+  let saved: string | null = null;
+  try { saved = storage?.getItem(SERVER_KEY) ?? null; } catch { /* storage blocked: the default */ }
+  const savedServer = list.find(s => s.id === saved);
+  const fallback = defaultServer(list, storage, tz);
+  if (saved !== null && !savedServer && fallback) rememberServer(fallback.id, storage);
+  return list.find(s => s.id === asked) ?? list.find(s => s.id === link) ?? savedServer ?? fallback;
+}
+
+function defaultServer(list: readonly GameServer[], storage: KeyValue | undefined, tz: string) {
+  const own = list[0];
+  // Only production's list: a dev build's own server stays its default.
+  if (!own || own.region !== 'server.region.taipei') return own;
+  let known = false;
+  try { known = !!storage?.getItem(`lawbreaker.token:${serverIdentityKey(own.uri)}:${own.database}`); } catch { /* storage blocked */ }
+  return known ? own : list.find(s => s.id === regionServer(tz)) ?? own;
+}
+
+export function rememberServer(id: ServerId, storage: KeyValue | undefined) {
+  try { storage?.setItem(SERVER_KEY, id); } catch { /* storage blocked: not remembered */ }
+}
+
+// ---- The current choice (in the browser) ----
+
+const browser = typeof location !== 'undefined';
+const storage = (): KeyValue | undefined => { try { return typeof localStorage === 'undefined' ? undefined : localStorage; } catch { return undefined; } };
+const timeZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ''; } catch { return ''; } };
+let state: { list: GameServer[]; current?: GameServer } | undefined;
+let linked: ServerId | undefined;
+const listeners = new Set<(server: GameServer) => void>();
+
+function init() {
+  if (!state) {
+    const list = browser ? gameServers(buildServer(import.meta.env as Env, location)) : [];
+    state = { list, current: chooseServer(list, browser ? location.search : '', storage(), timeZone(), linked) };
+  }
+  return state;
+}
+
+/** Every server this build offers (none when it has no server configured). */
+export const gameServerList = (): readonly GameServer[] => init().list;
+/** The chosen server, or undefined when online play is off. */
+export const currentServer = () => init().current;
+
+/**
+ * The page was opened for a friend's room on `id` (src/game/challenge.ts `linkServer`): play there this
+ * visit, without saving it. Before the first `currentServer()` it only sets the start; later (a CrazyGames
+ * invite accepted while the game is open) it switches like a choice in Settings.
+ */
+export function followLink(id: ServerId | undefined) {
+  if (!id) return;
+  if (!state) { linked = id; return; }
+  const next = state.list.find(x => x.id === id);
+  if (!next || next === state.current) return;
+  state.current = next;
+  for (const fn of [...listeners]) fn(next);
+}
+
+/** Choose a server (saved for next time) and tell every screen that follows it. */
+export function selectServer(id: ServerId) {
+  const s = init(), next = s.list.find(x => x.id === id);
+  if (!next) return;
+  rememberServer(next.id, storage());
+  if (next === s.current) return;
+  s.current = next;
+  for (const fn of [...listeners]) fn(next);
+}
+
+/** Follow the choice; returns the unsubscribe function. */
+export function onServer(fn: (server: GameServer) => void) { listeners.add(fn); return () => { listeners.delete(fn); }; }

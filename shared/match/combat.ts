@@ -1,0 +1,397 @@
+import type { CollisionWorld } from '../collision';
+import { chestPoint, hitShape, raycastSoldier, type HitShape } from '../hitbox';
+import { peekOf } from '../peek';
+import type { MapDef } from '../maps/types';
+import { dist3, segmentPointDistance, type Vec3 } from '../math';
+import { MOVE, createMoveState, eyeHeight } from '../movement';
+import { GRENADE, HEALTH, HIGH_EXPLOSIVE, SLIPPER, SMOKE, STAMINA, slipperDamage, pelletCone, pelletDirs, zoneDamage, type HitZone, type WeaponDef } from '../weapons';
+import { VEHICLES, obstaclesOf, raycastVehicle, vehicleCenter, type Vehicle } from '../vehicles';
+import { deepestOverlap, resolveObstacles } from '../obstacles';
+import { BODY_RADIUS, type Body } from '../world';
+import { CASH, award, statsOf } from './economy';
+import type { NavGraph } from './nav';
+import { ATTACKERS, type MatchEvent, type MatchState, type Soldier, type Team } from './state';
+
+export interface SimContext {
+  map: MapDef;
+  world: CollisionWorld;
+  nav?: NavGraph;
+  random: () => number;
+  emit: (event: MatchEvent) => void;
+}
+
+export const TICK_RATE = 30;
+
+export const weaponOf = (s: Soldier): WeaponDef => statsOf(s);
+export const eyeOf = (s: Soldier): Vec3 => ({ x: s.m.x, y: s.m.y + eyeHeight(s.m), z: s.m.z });
+export const feetOf = (s: Soldier): Vec3 => ({ x: s.m.x, y: s.m.y, z: s.m.z });
+/** A soldier's hit volumes, leaning out if it auto-peeks (peek.ts); `feet` may move them (lag compensation). */
+export const shapeOf = (ctx: SimContext, s: Soldier, feet: Vec3 = feetOf(s)): HitShape => hitShape(feet, s.m.crouch, s.yaw, peekOf(ctx.world, s));
+export const isHostile = (a: number, b: number) => a !== b || a === -1;
+
+/**
+ * Distance budget for client-reported movement: refills at `speed` (above slide speed, with room for slide-hops)
+ * up to `max` metres: how far a burst of delayed reports may move at once (about 0.7 s of sprinting).
+ */
+export const MOVE_SLACK = { speed: 14, max: 6 };
+
+/**
+ * A bomb site is armed and disarmed on its own floor: within `reach` of its centre across the
+ * floor and within SITE_FLOOR of its height, so a site under another floor (Memorial Hall's
+ * Gallery Hall under the chamber) is not reached from the storey above or below it.
+ */
+export const SITE_FLOOR = 2.5;
+export const onSite = (p: { x: number; y: number; z: number }, x: number, y: number, z: number, reach: number) =>
+  Math.hypot(p.x - x, p.z - z) < reach && Math.abs(y - p.y) < SITE_FLOOR;
+
+/**
+ * Which base a team deploys from. Militia attacks in Sabotage; a map whose attacking side is its
+ * team-0 base swaps the bases for that mode.
+ */
+export function sideOf(state: MatchState, map: MapDef, team: Team): Team {
+  if (state.config.mode !== 'sabotage' || !map.sabotage) return team;
+  const attackerSide = map.sabotage.attackerSpawn;
+  return (team === ATTACKERS ? attackerSide : 1 - attackerSide) as Team;
+}
+
+/** Deploy a soldier in their base for a new round: full health, stamina and ammo. */
+export function spawnSoldier(state: MatchState, ctx: SimContext, s: Soldier) {
+  const side = sideOf(state, ctx.map, s.team);
+  const options = ctx.map.spawns.filter(p => p.team === side);
+  // A vehicle driven onto a slot mid-round (they park back at their spots every round) rules it out.
+  const vehicles = state.vehicles.length ? obstaclesOf(state.vehicles) : undefined;
+  // Prefer the slot with the most room from soldiers already standing in the base.
+  let best = options[0], bestScore = -Infinity;
+  for (const o of options) {
+    let near = Infinity;
+    for (const other of state.soldiers) if (other.alive && other.id !== s.id && other.team === s.team) near = Math.min(near, Math.hypot(other.m.x - o.x, other.m.z - o.z));
+    // A slot someone already stands on is the last resort (big rooms fill every slot).
+    let score = near < 1.3 ? near - 20 : Math.min(near, 12) + ctx.random() * 2;
+    if (vehicles && deepestOverlap(vehicles, o, MOVE.radius + 0.3, MOVE.standHeight).depth > 0) score -= 100;
+    if (score > bestScore) { bestScore = score; best = o; }
+  }
+  s.m = createMoveState(best.x + (ctx.random() - 0.5) * 0.5, best.y, best.z + (ctx.random() - 0.5) * 0.5);
+  s.m.y = ctx.world.groundHeight(s.m.x, s.m.z, best.y + 1, 0.3);
+  if (vehicles) {
+    // Every slot taken by a vehicle: step out of its way (the walls still win).
+    const pos = { x: s.m.x, y: s.m.y, z: s.m.z };
+    if (resolveObstacles(vehicles, pos, MOVE.radius, MOVE.standHeight)) {
+      ctx.world.resolveCylinder(pos, MOVE.radius, MOVE.standHeight, s.team);
+      s.m.x = pos.x; s.m.z = pos.z; s.m.y = ctx.world.groundHeight(pos.x, pos.z, best.y + 1, 0.3);
+    }
+  }
+  s.yaw = best.yaw; s.pitch = 0;
+  s.alive = true; s.health = HEALTH.max; s.stamina = STAMINA.max; s.slippers = 1;
+  s.weapon = 0; s.reloadLeft = 0; s.fireCooldown = 0; s.switchLeft = statsOf(s, 0).equipTime;
+  s.sinceHit = 99; s.lastAttacker = -1; s.sinceShot = 99; s.moveSlack = MOVE_SLACK.max; s.groundY = s.m.y; s.using = false;
+  if (s.brain) { s.brain.path = []; s.brain.target = -1; s.brain.repath = 0; s.brain.goal = ''; }
+  ctx.emit({ type: 'spawn', id: s.id });
+}
+
+export function applyDamage(state: MatchState, ctx: SimContext, target: Soldier, attackerId: number, amount: number, zone: HitZone | 'blast' | 'burn' | 'fall', from: Vec3, weapon: string) {
+  if (!target.alive || amount <= 0 || state.phase === 'ended' || state.roundPhase === 'over') return false;
+  const attacker = state.soldiers.find(s => s.id === attackerId);
+  if (attacker && attacker.team === target.team && attacker.id !== target.id) return false;
+  amount = Math.min(amount, target.health);
+  target.health -= amount;
+  target.sinceHit = 0;
+  if (attacker && attacker !== target) {
+    target.lastAttacker = attacker.id;
+    target.round.hits.push({ by: attacker.id, at: state.time });
+  }
+  ctx.emit({ type: 'damage', target: target.id, attacker: attackerId, amount: Math.round(amount), zone, x: from.x, y: from.y, z: from.z });
+  if (target.health <= 0) killSoldier(state, ctx, target, attacker === target ? undefined : attacker, weapon, zone === 'head');
+  return true;
+}
+
+/** A death: track kills and assists without awarding kill money or personal score. */
+export function killSoldier(state: MatchState, ctx: SimContext, victim: Soldier, killer: Soldier | undefined, weapon: string, head: boolean) {
+  victim.alive = false; victim.deaths++; victim.health = 0;
+  victim.reloadLeft = 0; victim.m.vx = 0; victim.m.vz = 0; victim.using = false;
+  if (killer && killer.team !== victim.team) {
+    state.lastKillTeam = killer.team;
+    killer.kills++;
+  }
+  // Assists: anyone else who hurt the victim in its last 3 seconds.
+  const helped = new Set<number>();
+  for (const h of victim.round.hits) {
+    if (h.by === killer?.id || helped.has(h.by) || state.time - h.at > CASH.assistWindow) continue;
+    const helper = state.soldiers.find(s => s.id === h.by);
+    if (!helper || helper.team === victim.team) continue;
+    helped.add(h.by); helper.assists++;
+  }
+  victim.round.hits = [];
+  ctx.emit({ type: 'kill', killer: killer?.id ?? -1, victim: victim.id, weapon, head });
+}
+
+/** Spread cone (degrees) for a soldier's current state. */
+export function spreadFor(s: Soldier, w: WeaponDef, bloom = 0) {
+  const moving = Math.hypot(s.m.vx, s.m.vz) > 1.5;
+  let spread = s.ads ? w.spread.ads : w.spread.hip;
+  if (moving) spread += w.spread.moving * (s.ads ? 0.35 : 1);
+  if (!s.m.grounded) spread += w.spread.air;
+  if (s.m.crouch > 0.5 && !moving) spread *= 0.7;
+  return spread + bloom;
+}
+
+export interface TraceResult { point: Vec3; soldier?: Soldier; zone?: HitZone; distance: number; surface?: string; vehicle?: Vehicle }
+
+/** The vehicle and seat (0 drives) a soldier occupies, if any. */
+export function seatOf(state: Pick<MatchState, 'vehicles'>, id: number): { vehicle: Vehicle; seat: 0 | 1 } | undefined {
+  for (const v of state.vehicles) {
+    if (v.driver === id) return { vehicle: v, seat: 0 };
+    if (v.passenger === id) return { vehicle: v, seat: 1 };
+  }
+  return undefined;
+}
+
+/** Soldiers sitting inside a closed vehicle (car, helicopter): shots and blasts hit the body instead. */
+export function shieldedIds(state: Pick<MatchState, 'vehicles'>) {
+  const ids = new Set<number>();
+  for (const v of state.vehicles) {
+    if (VEHICLES[v.kind].exposed) continue;
+    if (v.driver >= 0) ids.add(v.driver);
+    if (v.passenger >= 0) ids.add(v.passenger);
+  }
+  return ids;
+}
+
+/** Team aboard a vehicle (-1 empty). */
+export function crewTeam(state: MatchState, v: Vehicle): number {
+  for (const id of [v.driver, v.passenger]) {
+    const s = id >= 0 ? state.soldiers.find(x => x.id === id) : undefined;
+    if (s) return s.team;
+  }
+  return -1;
+}
+
+/**
+ * Authoritative hitscan against static geometry and enemy soldiers. `feet` may move a
+ * soldier's hit shape to where the shooter saw it (validated lag compensation for pellets).
+ */
+export function traceShot(state: MatchState, ctx: SimContext, shooter: Soldier, origin: Vec3, dir: Vec3, range: number, feet: (s: Soldier) => Vec3 = feetOf): TraceResult {
+  const wall = ctx.world.raycast(origin, dir, range, shooter.team);
+  let best = wall ? wall.t : range;
+  let result: TraceResult = { point: wall ? wall.point : { x: origin.x + dir.x * range, y: origin.y + dir.y * range, z: origin.z + dir.z * range }, distance: best, surface: wall?.surface };
+  const shielded = state.vehicles.length ? shieldedIds(state) : undefined;
+  for (const v of state.vehicles) {
+    if (v.driver === shooter.id || v.passenger === shooter.id) continue;
+    const t = raycastVehicle(origin, dir, v);
+    if (t >= 0 && t < best) {
+      best = t;
+      result = { point: { x: origin.x + dir.x * t, y: origin.y + dir.y * t, z: origin.z + dir.z * t }, distance: t, vehicle: v, surface: 'metal' };
+    }
+  }
+  for (const s of state.soldiers) {
+    if (!s.alive || s.id === shooter.id || s.team === shooter.team || shielded?.has(s.id)) continue;
+    if (Math.abs(s.m.x - origin.x) > best + 2 || Math.abs(s.m.z - origin.z) > best + 2) continue;
+    const hit = raycastSoldier(origin, dir, shapeOf(ctx, s, feet(s)));
+    if (hit && hit.t < best) {
+      best = hit.t;
+      result = { point: { x: origin.x + dir.x * hit.t, y: origin.y + dir.y * hit.t, z: origin.z + dir.z * hit.t }, soldier: s, zone: hit.zone, distance: hit.t };
+    }
+  }
+  return result;
+}
+
+/** Resolve a hitscan (or knife) result into damage and a replicated tracer event. */
+export function resolveShot(state: MatchState, ctx: SimContext, shooter: Soldier, w: WeaponDef, origin: Vec3, result: TraceResult) {
+  let hit: 0 | 1 | 2 = 0;
+  if (result.soldier && result.zone) {
+    if (applyDamage(state, ctx, result.soldier, shooter.id, zoneDamage(w, result.zone), result.zone, origin, w.id)) hit = result.zone === 'head' ? 2 : 1;
+  } else if (result.vehicle && damageVehicle(state, ctx, result.vehicle, shooter.id, zoneDamage(w, 'body'), w.id)) hit = 1;
+  ctx.emit({ type: 'shot', shooter: shooter.id, weapon: w.id, from: origin, to: result.point, hit, surface: result.surface });
+}
+
+/**
+ * Fire every pellet of a shotgun blast along the weapon's fixed pattern. Damage per target is
+ * summed into one hit (a head pellet makes it a headshot); each pellet still leaves a tracer.
+ */
+export function resolvePellets(state: MatchState, ctx: SimContext, shooter: Soldier, w: WeaponDef, origin: Vec3, dir: Vec3, ads: boolean, feet: (s: Soldier) => Vec3 = feetOf) {
+  const hits = new Map<Soldier, { amount: number; head: boolean }>();
+  const bodies = new Map<Vehicle, number>();
+  for (const d of pelletDirs(dir, pelletCone(w, ads), w.pellets)) {
+    const r = traceShot(state, ctx, shooter, origin, d, w.range, feet);
+    let hit: 0 | 1 | 2 = 0;
+    if (r.vehicle) { bodies.set(r.vehicle, (bodies.get(r.vehicle) ?? 0) + zoneDamage(w, 'body')); hit = 1; }
+    if (r.soldier && r.zone) {
+      const h = hits.get(r.soldier) ?? { amount: 0, head: false };
+      h.amount += zoneDamage(w, r.zone);
+      h.head ||= r.zone === 'head';
+      hits.set(r.soldier, h);
+      hit = r.zone === 'head' ? 2 : 1;
+    }
+    ctx.emit({ type: 'shot', shooter: shooter.id, weapon: w.id, from: origin, to: r.point, hit, surface: r.surface });
+  }
+  for (const [target, h] of hits) applyDamage(state, ctx, target, shooter.id, h.amount, h.head ? 'head' : 'body', origin, w.id);
+  for (const [v, amount] of bodies) damageVehicle(state, ctx, v, shooter.id, amount, w.id);
+}
+
+export function spawnBody(state: MatchState, kind: Body['kind'], p: Vec3, v: Vec3, owner: number, team: number, hp = 1, timer = 0): Body {
+  const body: Body = { id: state.nextId++, kind, x: p.x, y: p.y, z: p.z, vx: v.x, vy: v.y, vz: v.z, age: 0, owner, team, hp, timer };
+  state.bodies.push(body);
+  return body;
+}
+
+/** Throw the M18 smoke grenade: the M67's arc; it pops into a cloud after its fuse (`popSmoke`). */
+export function throwSmokeFrom(state: MatchState, s: Soldier, origin: Vec3, dir: Vec3) {
+  if (!s.alive || s.smokes <= 0) return undefined;
+  s.smokes--;
+  const v = { x: dir.x * GRENADE.throwSpeed + s.m.vx * 0.5, y: dir.y * GRENADE.throwSpeed + 2.6, z: dir.z * GRENADE.throwSpeed + s.m.vz * 0.5 };
+  return spawnBody(state, 'smoke', origin, v, s.id, s.team, 1, SMOKE.fuse);
+}
+
+/** A smoke grenade's fuse ran out: a still cloud where it lies, for SMOKE.duration seconds. */
+export function popSmoke(state: MatchState, ctx: SimContext, g: Body) {
+  spawnBody(state, 'smokeCloud', { x: g.x, y: g.y, z: g.z }, { x: 0, y: 0, z: 0 }, g.owner, g.team, 1, SMOKE.duration);
+  ctx.emit({ type: 'smoke', x: g.x, y: g.y, z: g.z, owner: g.owner });
+}
+
+/** Whether smoke hides `b` from `a`: the sight line passes through a cloud (either end inside one counts). */
+export function smokeBlocks(bodies: readonly Body[], a: Vec3, b: Vec3) {
+  for (const c of bodies) {
+    if (c.kind !== 'smokeCloud') continue;
+    if (segmentPointDistance({ x: c.x, y: c.y + SMOKE.height, z: c.z }, a, b).distance < SMOKE.radius) return true;
+  }
+  return false;
+}
+
+/**
+ * Throw the 藍白拖 in hand, wound up to `power` (0..1: SLIPPER.minSpeed to maxSpeed), nearly flat
+ * along the aim. The hand that held it brings up the secondary.
+ */
+export function throwSlipperFrom(state: MatchState, ctx: SimContext, s: Soldier, origin: Vec3, dir: Vec3, power: number) {
+  if (!s.alive || s.slippers <= 0) return undefined;
+  s.slippers--;
+  power = Math.max(0, Math.min(1, power || 0));
+  const speed = SLIPPER.minSpeed + (SLIPPER.maxSpeed - SLIPPER.minSpeed) * power;
+  const v = { x: dir.x * speed + s.m.vx * 0.5, y: dir.y * speed + SLIPPER.lift, z: dir.z * speed + s.m.vz * 0.5 };
+  if (s.weapon === 2) { s.weapon = 1; s.reloadLeft = 0; s.switchLeft = statsOf(s, 1).equipTime; }
+  ctx.emit({ type: 'slipper', action: 'throw', id: s.id, x: origin.x, y: origin.y, z: origin.z });
+  // Its hp carries the damage it will do (slipperDamage), until something takes the sting out of it.
+  return spawnBody(state, 'slipper', origin, v, s.id, s.team, slipperDamage(power), SLIPPER.lifetime);
+}
+
+/**
+ * A slipper still in flight moved `from` → where it is now: the first enemy across that path (not the
+ * thrower, not a teammate, not someone inside a car) takes its damage (a full wind-up kills), and the
+ * slipper drops off them, harmless.
+ */
+export function slipperStrike(state: MatchState, ctx: SimContext, b: Body, from: Vec3) {
+  const dx = b.x - from.x, dy = b.y - from.y, dz = b.z - from.z, len = Math.hypot(dx, dy, dz);
+  if (len < 1e-6) return;
+  const dir = { x: dx / len, y: dy / len, z: dz / len };
+  let best: { s: Soldier; t: number; zone: HitZone } | undefined;
+  const shielded = state.vehicles.length ? shieldedIds(state) : undefined;
+  for (const s of state.soldiers) {
+    if (!s.alive || s.id === b.owner || s.team === b.team || shielded?.has(s.id)) continue;
+    if (Math.abs(s.m.x - from.x) > len + 1.5 || Math.abs(s.m.z - from.z) > len + 1.5) continue;
+    const hit = raycastSoldier(from, dir, shapeOf(ctx, s));
+    if (hit && hit.t <= len + BODY_RADIUS.slipper && (!best || hit.t < best.t)) best = { s, ...hit };
+  }
+  if (!best) return;
+  const damage = b.hp;
+  b.hp = 0;
+  b.x = from.x + dir.x * best.t; b.y = from.y + dir.y * best.t; b.z = from.z + dir.z * best.t;
+  b.vx *= -0.08; b.vz *= -0.08; b.vy = 1;
+  ctx.emit({ type: 'slipper', action: 'hit', id: best.s.id, x: b.x, y: b.y, z: b.z });
+  // A kill with the 藍白拖 is a knife kill (kill feed mark, cash, match stats).
+  applyDamage(state, ctx, best.s, b.owner, damage, best.zone, { x: b.x, y: b.y, z: b.z }, 'knife');
+}
+
+/** Anyone alive with an empty hand picks up a slipper lying (or bouncing) within reach. */
+export function pickUpSlippers(state: MatchState, ctx: SimContext) {
+  for (let i = state.bodies.length - 1; i >= 0; i--) {
+    const b = state.bodies[i];
+    if (b.kind !== 'slipper' || b.hp > 0 || b.age < SLIPPER.catchDelay) continue;
+    const s = state.soldiers.find(s => s.alive && s.slippers <= 0 && Math.hypot(s.m.x - b.x, s.m.z - b.z) <= SLIPPER.pickup && b.y > s.m.y - 1 && b.y < s.m.y + 2);
+    if (!s) continue;
+    s.slippers = 1;
+    state.bodies.splice(i, 1);
+    ctx.emit({ type: 'slipper', action: 'pickup', id: s.id, x: b.x, y: b.y, z: b.z });
+  }
+}
+
+/** Throw the M67 (a High Explosive grenade is marked by hp 2). */
+export function throwGrenadeFrom(state: MatchState, s: Soldier, origin: Vec3, dir: Vec3) {
+  if (!s.alive || s.grenades <= 0) return undefined;
+  s.grenades--;
+  const v = { x: dir.x * GRENADE.throwSpeed + s.m.vx * 0.5, y: dir.y * GRENADE.throwSpeed + 2.6, z: dir.z * GRENADE.throwSpeed + s.m.vz * 0.5 };
+  return spawnBody(state, 'grenade', origin, v, s.id, s.team, s.grenadeHE ? 2 : 1, GRENADE.fuse);
+}
+
+/** BeGone's 22-unit blast range, read as a diameter in metres (11 m radius); HE: +45 damage, −6. */
+export function blastOf(he: boolean) {
+  return { radius: (GRENADE.radius + (he ? HIGH_EXPLOSIVE.radius : 0)) / 2, damage: GRENADE.damage + (he ? HIGH_EXPLOSIVE.damage : 0) };
+}
+
+/** Frag blast: damage falls off with distance, blocked by walls, never hurts teammates. */
+export function explode(state: MatchState, ctx: SimContext, g: Body) {
+  const { radius, damage } = blastOf(g.hp === 2);
+  const center = { x: g.x, y: g.y + 0.2, z: g.z };
+  ctx.emit({ type: 'explosion', x: g.x, y: g.y, z: g.z, owner: g.owner, radius, weapon: 'grenade' });
+  blast(state, ctx, center, radius, damage, g.owner, 'grenade', VEHICLE_BLAST);
+}
+
+/** Frags hurt vehicle bodies harder than soldiers (a well-placed M67 wrecks a scooter). */
+const VEHICLE_BLAST = 1.6;
+
+/** Damage everything in `radius` of `center` with line of sight, falling off with distance; no friendly fire. */
+function blast(state: MatchState, ctx: SimContext, center: Vec3, radius: number, damage: number, ownerId: number, weapon: string, vehicleScale: number, except?: Vehicle) {
+  const owner = state.soldiers.find(o => o.id === ownerId);
+  const shielded = shieldedIds(state);
+  for (const s of state.soldiers) {
+    if (!s.alive || shielded.has(s.id)) continue;
+    const chest = chestPoint(feetOf(s), s.m.crouch);
+    const d = dist3(center, chest);
+    if (d > radius || !ctx.world.lineOfSight(center, chest, -2)) continue;
+    if (owner && owner.team === s.team && owner.id !== s.id) continue;
+    applyDamage(state, ctx, s, ownerId, damage * (1 - d / radius) ** 1.2, 'blast', center, weapon);
+  }
+  for (const v of state.vehicles) {
+    if (v === except || v.wrecked) continue;
+    const c = vehicleCenter(v), d = Math.max(0, dist3(center, c) - VEHICLES[v.kind].box.w);
+    if (d > radius || !ctx.world.lineOfSight(center, c, -2)) continue;
+    damageVehicle(state, ctx, v, ownerId, damage * vehicleScale * (1 - d / radius) ** 1.2, weapon);
+  }
+}
+
+/** Radius and damage of a vehicle's wreck explosion. */
+export const WRECK_BLAST = { radius: 7, damage: 90 };
+
+/**
+ * Damage a vehicle's body (bullets on cars and the helicopter, blasts, crashes). A crewed vehicle
+ * takes no damage from its crew's team; an empty one is fair game. At zero it wrecks.
+ */
+export function damageVehicle(state: MatchState, ctx: SimContext, v: Vehicle, attackerId: number, amount: number, weapon: string) {
+  if (v.wrecked || amount <= 0 || state.phase === 'ended' || state.roundPhase === 'over') return false;
+  const attacker = attackerId >= 0 ? state.soldiers.find(s => s.id === attackerId) : undefined;
+  const crew = crewTeam(state, v), aboard = attackerId === v.driver || attackerId === v.passenger;
+  if (attacker && !aboard && crew === attacker.team) return false;
+  v.health -= amount;
+  if (attacker && !aboard) v.lastAttacker = attacker.id;
+  ctx.emit({ type: 'vehicle', action: 'hit', vehicle: v.id, id: attackerId, amount: Math.round(amount) });
+  if (v.health <= 0) wreckVehicle(state, ctx, v, attacker && !aboard ? attacker.id : v.lastAttacker, weapon);
+  return true;
+}
+
+/** The vehicle explodes: its crew dies, the blast hurts whoever stands near, and the hulk stays for the round. */
+export function wreckVehicle(state: MatchState, ctx: SimContext, v: Vehicle, killerId: number, weapon: string) {
+  if (v.wrecked) return;
+  v.health = 0; v.wrecked = true;
+  const center = vehicleCenter(v);
+  ctx.emit({ type: 'vehicle', action: 'wreck', vehicle: v.id, id: killerId });
+  ctx.emit({ type: 'explosion', x: center.x, y: center.y, z: center.z, owner: killerId, radius: WRECK_BLAST.radius, weapon: 'vehicle' });
+  const killer = killerId >= 0 ? state.soldiers.find(s => s.id === killerId) : undefined;
+  for (const id of [v.driver, v.passenger]) {
+    const s = id >= 0 ? state.soldiers.find(x => x.id === id) : undefined;
+    if (s?.alive) killSoldier(state, ctx, s, killer && killer.id !== s.id && killer.team !== s.team ? killer : undefined, weapon === 'crash' ? 'crash' : 'vehicle', false);
+  }
+  v.driver = -1; v.passenger = -1;
+  v.vx *= 0.3; v.vz *= 0.3;
+  blast(state, ctx, center, WRECK_BLAST.radius, WRECK_BLAST.damage, killerId, 'vehicle', 2.5, v);
+}
+
+export function teamCount(state: MatchState, team: Team, humansOnly = false) {
+  return state.soldiers.filter(s => s.team === team && (!humansOnly || !s.bot)).length;
+}

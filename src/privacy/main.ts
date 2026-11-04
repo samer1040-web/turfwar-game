@@ -1,0 +1,1 @@
+console.log("privacy page");

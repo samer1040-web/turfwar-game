@@ -1,0 +1,226 @@
+import * as THREE from 'three';
+import type { Assets } from '../assets';
+import type { ThemeId } from '../../shared/maps/types';
+
+export interface Theme {
+  id: ThemeId;
+  ground: string; rock: string; dirt: string;
+  groundTint: THREE.Color; rockTint: THREE.Color; dirtTint: THREE.Color;
+  skyTop: THREE.Color; skyHorizon: THREE.Color; fog: THREE.Color; fogDensity: number;
+  sunColor: THREE.Color; sunIntensity: number; hemiSky: THREE.Color; hemiGround: THREE.Color; hemiIntensity: number;
+  /** Ringed gas giant in the sky; null for the Earth-like BeGone skies. */
+  planet: THREE.Color | null; exposure: number;
+  /** A paved city: no scattered pebbles or boulders. */
+  urban?: boolean;
+}
+
+export const THEMES: Record<ThemeId, Theme> = {
+  desert: {
+    id: 'desert', ground: 'sand', rock: 'cliff', dirt: 'dirt',
+    groundTint: new THREE.Color(1.08, 0.86, 0.66), rockTint: new THREE.Color(0.95, 0.72, 0.56), dirtTint: new THREE.Color(1.0, 0.82, 0.66),
+    skyTop: new THREE.Color(0x3a6f9c), skyHorizon: new THREE.Color(0xe9c39a), fog: new THREE.Color(0xd8b48e), fogDensity: 0.0042,
+    sunColor: new THREE.Color(0xffdcb0), sunIntensity: 3.6, hemiSky: new THREE.Color(0xa9c8e8), hemiGround: new THREE.Color(0x8a6447), hemiIntensity: 1.25,
+    planet: new THREE.Color(0xd9a27a), exposure: 1.0,
+  },
+  snow: {
+    id: 'snow', ground: 'snow', rock: 'icerock', dirt: 'icerock',
+    groundTint: new THREE.Color(0.95, 0.98, 1.05), rockTint: new THREE.Color(0.56, 0.64, 0.78), dirtTint: new THREE.Color(0.8, 0.88, 1.0),
+    skyTop: new THREE.Color(0x48688e), skyHorizon: new THREE.Color(0xc9d8e6), fog: new THREE.Color(0xbccbd9), fogDensity: 0.006,
+    sunColor: new THREE.Color(0xe8f0ff), sunIntensity: 2.6, hemiSky: new THREE.Color(0xc8dcf0), hemiGround: new THREE.Color(0x7d8a99), hemiIntensity: 1.5,
+    planet: new THREE.Color(0xb7c4e8), exposure: 0.92,
+  },
+  forest: {
+    id: 'forest', ground: 'moss', rock: 'lichen', dirt: 'path',
+    groundTint: new THREE.Color(0.72, 1.0, 0.55), rockTint: new THREE.Color(0.72, 0.8, 0.74), dirtTint: new THREE.Color(0.9, 0.84, 0.72),
+    skyTop: new THREE.Color(0x2f6f86), skyHorizon: new THREE.Color(0xb9d6c9), fog: new THREE.Color(0x9fc0b4), fogDensity: 0.0055,
+    sunColor: new THREE.Color(0xfff0d0), sunIntensity: 3.1, hemiSky: new THREE.Color(0xb8e0d8), hemiGround: new THREE.Color(0x4f5f3d), hemiIntensity: 1.35,
+    planet: new THREE.Color(0x9fd6c6), exposure: 0.98,
+  },
+  // Low sun over grass, sandy paths and grey rock (BeGone's Tower and Crane evenings).
+  dusk: {
+    id: 'dusk', ground: 'path', rock: 'lichen', dirt: 'sand',
+    groundTint: new THREE.Color(0.8, 1.0, 0.56), rockTint: new THREE.Color(0.9, 0.86, 0.8), dirtTint: new THREE.Color(1.0, 0.9, 0.74),
+    skyTop: new THREE.Color(0x4a6896), skyHorizon: new THREE.Color(0xf0b07a), fog: new THREE.Color(0xc9a68a), fogDensity: 0.0042,
+    sunColor: new THREE.Color(0xffc690), sunIntensity: 3.1, hemiSky: new THREE.Color(0xb4bed8), hemiGround: new THREE.Color(0x5e5a42), hemiIntensity: 1.25,
+    planet: null, exposure: 1.0,
+  },
+  // Dry midday over gravel, sparse grass and grey boulders (BeGone's Timbertown).
+  steppe: {
+    id: 'steppe', ground: 'dirt', rock: 'lichen', dirt: 'sand',
+    groundTint: new THREE.Color(1.0, 0.93, 0.8), rockTint: new THREE.Color(0.96, 0.95, 0.92), dirtTint: new THREE.Color(1.0, 0.93, 0.82),
+    skyTop: new THREE.Color(0x5b85b4), skyHorizon: new THREE.Color(0xd8d2c2), fog: new THREE.Color(0xcfc7b4), fogDensity: 0.0035,
+    sunColor: new THREE.Color(0xfff0d8), sunIntensity: 3.4, hemiSky: new THREE.Color(0xbcd0e6), hemiGround: new THREE.Color(0x7a6a50), hemiIntensity: 1.3,
+    planet: null, exposure: 1.0,
+  },
+  // Green grass, grey rock outcrops and woods under a clear sky (BeGone's Pipeline).
+  meadow: {
+    id: 'meadow', ground: 'path', rock: 'lichen', dirt: 'dirt',
+    groundTint: new THREE.Color(0.74, 1.0, 0.58), rockTint: new THREE.Color(0.9, 0.92, 0.88), dirtTint: new THREE.Color(0.92, 0.86, 0.76),
+    skyTop: new THREE.Color(0x4f7fb8), skyHorizon: new THREE.Color(0xc9d8e2), fog: new THREE.Color(0xb4c4c8), fogDensity: 0.004,
+    sunColor: new THREE.Color(0xfff4e0), sunIntensity: 3.3, hemiSky: new THREE.Color(0xc0d8ec), hemiGround: new THREE.Color(0x4e5a3a), hemiIntensity: 1.35,
+    planet: null, exposure: 1.0,
+  },
+  // Blue hour over a walled garden: cool, soft light that still reads at range.
+  twilight: {
+    id: 'twilight', ground: 'moss', rock: 'lichen', dirt: 'path',
+    groundTint: new THREE.Color(0.62, 0.8, 0.6), rockTint: new THREE.Color(0.7, 0.76, 0.8), dirtTint: new THREE.Color(0.8, 0.82, 0.8),
+    skyTop: new THREE.Color(0x1f3a64), skyHorizon: new THREE.Color(0x8aa6c8), fog: new THREE.Color(0x6a82a2), fogDensity: 0.006,
+    sunColor: new THREE.Color(0xc4d2ff), sunIntensity: 2.0, hemiSky: new THREE.Color(0x9cb4dc), hemiGround: new THREE.Color(0x3a4440), hemiIntensity: 1.45,
+    planet: null, exposure: 1.05,
+  },
+  // A humid Taipei evening: asphalt streets, a hazy amber sky and green hills around the basin.
+  taipei: {
+    id: 'taipei', ground: 'concrete', rock: 'moss', dirt: 'concrete',
+    groundTint: new THREE.Color(0.42, 0.43, 0.45), rockTint: new THREE.Color(0.55, 0.75, 0.55), dirtTint: new THREE.Color(0.5, 0.5, 0.52),
+    skyTop: new THREE.Color(0x2c3f66), skyHorizon: new THREE.Color(0xe8a27a), fog: new THREE.Color(0xa49890), fogDensity: 0.003,
+    sunColor: new THREE.Color(0xffc49a), sunIntensity: 2.6, hemiSky: new THREE.Color(0xa8b4d4), hemiGround: new THREE.Color(0x5a5048), hemiIntensity: 1.4,
+    planet: null, exposure: 1.0, urban: true,
+  },
+  // Xinyi after dusk: the last violet light over the hills, the towers lit from inside and a warm
+  // sodium glow on the paving. Soldiers still read at range: the night is in the sky, not the floor.
+  xinyi: {
+    id: 'xinyi', ground: 'moss', rock: 'moss', dirt: 'path',
+    groundTint: new THREE.Color(0.6, 0.85, 0.55), rockTint: new THREE.Color(0.75, 0.95, 0.72), dirtTint: new THREE.Color(0.46, 0.46, 0.5),
+    skyTop: new THREE.Color(0x0a1230), skyHorizon: new THREE.Color(0x4e4a74), fog: new THREE.Color(0x2c3048), fogDensity: 0.0019,
+    sunColor: new THREE.Color(0xc4ceff), sunIntensity: 2.1, hemiSky: new THREE.Color(0x9aa6d8), hemiGround: new THREE.Color(0x9a7a5a), hemiIntensity: 2.1,
+    planet: null, exposure: 1.2, urban: true,
+  },
+  // Golden hour from an office floor 383 m up Taipei 101: a low amber sun through the west glass,
+  // warm bounce off the carpet indoors, and a thin haze over the city far below.
+  highrise: {
+    id: 'highrise', ground: 'concrete', rock: 'moss', dirt: 'concrete',
+    groundTint: new THREE.Color(0.42, 0.43, 0.45), rockTint: new THREE.Color(0.55, 0.75, 0.55), dirtTint: new THREE.Color(0.5, 0.5, 0.52),
+    skyTop: new THREE.Color(0x3c5c92), skyHorizon: new THREE.Color(0xf0b282), fog: new THREE.Color(0xc4a892), fogDensity: 0.0009,
+    sunColor: new THREE.Color(0xffbf86), sunIntensity: 3.2, hemiSky: new THREE.Color(0xd8d8e0), hemiGround: new THREE.Color(0x8c7866), hemiIntensity: 1.7,
+    planet: null, exposure: 1.0, urban: true,
+  },
+  // Memorial Hall (中正紀念堂) at golden hour: a soft blue sky warming to amber at the horizon, low
+  // sun on the white marble, green lawns; the hemisphere keeps the galleries under the hall readable.
+  memorial: {
+    id: 'memorial', ground: 'moss', rock: 'lichen', dirt: 'path',
+    groundTint: new THREE.Color(0.62, 1.0, 0.46), rockTint: new THREE.Color(0.92, 0.92, 0.88), dirtTint: new THREE.Color(1.05, 0.98, 0.86),
+    skyTop: new THREE.Color(0x4f7cb8), skyHorizon: new THREE.Color(0xf2c896), fog: new THREE.Color(0xd8c4ac), fogDensity: 0.0026,
+    sunColor: new THREE.Color(0xffd4a4), sunIntensity: 3.0, hemiSky: new THREE.Color(0xc4d4ec), hemiGround: new THREE.Color(0x9a8a72), hemiIntensity: 1.6,
+    planet: null, exposure: 1.0, urban: true,
+  },
+  // Sanchong (三重) late in the afternoon: a hazy amber sun low over the walk-ups, warm light down
+  // the lanes, a soft blue-grey sky; asphalt streets with tiled sidewalks along every wall.
+  sanchong: {
+    id: 'sanchong', ground: 'asphalt', rock: 'concrete', dirt: 'sidewalk',
+    groundTint: new THREE.Color(1.25, 1.22, 1.18), rockTint: new THREE.Color(0.85, 0.84, 0.8), dirtTint: new THREE.Color(1.55, 1.48, 1.4),
+    skyTop: new THREE.Color(0x4a6c9c), skyHorizon: new THREE.Color(0xf0b47e), fog: new THREE.Color(0xc8a88c), fogDensity: 0.0032,
+    sunColor: new THREE.Color(0xffc68e), sunIntensity: 3.0, hemiSky: new THREE.Color(0xb8c4dc), hemiGround: new THREE.Color(0x8a7a68), hemiIntensity: 1.55,
+    planet: null, exposure: 1.0, urban: true,
+  },
+};
+
+/**
+ * Cheaper level surfaces (the `low` preset, set by the renderer): no roughness maps on architecture
+ * and no normal maps on the ground. Read when a map is built; a change of preset applies from the next map.
+ */
+let cheap = false;
+export function setMaterialQuality(cheapMaterials: boolean) { cheap = cheapMaterials; }
+
+/** Terrain: world-space planar ground with triplanar rock on slopes and dirt along a splat channel. */
+export function terrainMaterial(assets: Assets, theme: Theme) {
+  const flat = cheap;
+  const t = (name: string) => assets.textures.get(name)!;
+  const material = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0 });
+  // Programs are cached by onBeforeCompile's source, which is the same for both variants.
+  material.customProgramCacheKey = () => (flat ? 'terrain-flat' : 'terrain');
+  material.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, {
+      tGround: { value: t(`${theme.ground}_diff`) }, tGroundN: { value: t(`${theme.ground}_nor`) },
+      tRock: { value: t(`${theme.rock}_diff`) }, tRockN: { value: t(`${theme.rock}_nor`) },
+      tDirt: { value: t(`${theme.dirt}_diff`) }, tDirtN: { value: t(`${theme.dirt}_nor`) },
+      groundTint: { value: theme.groundTint }, rockTint: { value: theme.rockTint }, dirtTint: { value: theme.dirtTint },
+    });
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float splat;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\nvarying float vSplat;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNormal = normalize(mat3(modelMatrix) * objectNormal);\nvSplat = splat;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform sampler2D tGround; uniform sampler2D tGroundN; uniform sampler2D tRock; uniform sampler2D tRockN; uniform sampler2D tDirt; uniform sampler2D tDirtN;
+uniform vec3 groundTint; uniform vec3 rockTint; uniform vec3 dirtTint;
+varying vec3 vWPos; varying vec3 vWNormal; varying float vSplat;
+vec3 triplanar(sampler2D tex, vec3 p, vec3 w, float s) {
+  return texture2D(tex, p.zy / s).rgb * w.x + texture2D(tex, p.xz / s).rgb * w.y + texture2D(tex, p.xy / s).rgb * w.z;
+}
+vec3 nTriplanar(sampler2D tex, vec3 p, vec3 n, vec3 w, float s) {
+  // UDN blend of tangent-space normals for each projection axis.
+  vec3 tx = texture2D(tex, p.zy / s).xyz * 2.0 - 1.0;
+  vec3 ty = texture2D(tex, p.xz / s).xyz * 2.0 - 1.0;
+  vec3 tz = texture2D(tex, p.xy / s).xyz * 2.0 - 1.0;
+  vec3 nx = vec3(0.0, tx.y, tx.x) * sign(n.x);
+  vec3 ny = vec3(ty.x, 0.0, ty.y) * sign(n.y);
+  vec3 nz = vec3(tz.x, tz.y, 0.0) * sign(n.z);
+  return normalize(n + (nx * w.x + ny * w.y + nz * w.z) * 0.9);
+}
+float slopeMix() { return smoothstep(0.86, 0.66, normalize(vWNormal).y); }`)
+      .replace('#include <map_fragment>', `
+vec3 wn = normalize(vWNormal);
+vec3 bw = pow(abs(wn), vec3(5.0)); bw /= dot(bw, vec3(1.0));
+float slope = slopeMix();
+vec2 guv = vWPos.xz / 7.0;
+float macro = texture2D(tGround, vWPos.xz / 97.0).g * 0.55 + texture2D(tDirt, vWPos.xz / 61.0).r * 0.45;
+vec3 groundCol = texture2D(tGround, guv).rgb * mix(0.82, 1.18, macro) * groundTint;
+vec3 dirtCol = texture2D(tDirt, vWPos.xz / 5.0).rgb * dirtTint;
+vec3 rockCol = triplanar(tRock, vWPos, bw, 9.0) * rockTint;
+float dirt = clamp(vSplat + (macro - 0.5) * 0.6, 0.0, 1.0);
+dirt = smoothstep(0.35, 0.75, dirt);
+vec3 col = mix(mix(groundCol, dirtCol, dirt), rockCol, slope);
+diffuseColor.rgb *= col;`)
+      // Cheap: the geometric normal (five fewer texture reads a pixel over most of the screen).
+      .replace('#include <normal_fragment_maps>', flat ? '' : `
+{
+  vec3 nG = texture2D(tGroundN, guv).xyz * 2.0 - 1.0;
+  vec3 nD = texture2D(tDirtN, vWPos.xz / 5.0).xyz * 2.0 - 1.0;
+  vec3 flatN = mix(nG, nD, dirt);
+  vec3 groundN = normalize(wn + vec3(flatN.x, 0.0, flatN.y) * 0.8);
+  vec3 rockN = nTriplanar(tRockN, vWPos, wn, bw, 9.0);
+  vec3 worldN = normalize(mix(groundN, rockN, slope));
+  normal = normalize((viewMatrix * vec4(worldN, 0.0)).xyz);
+}`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.95, 0.82, slope);');
+  };
+  return material;
+}
+
+/**
+ * Box-mapped PBR material for architecture. UVs are generated in world space by the level
+ * builder so textures tile consistently across differently sized blocks.
+ */
+export function surfaceMaterial(assets: Assets, set: string, opts: { color?: number; roughness?: number; metalness?: number; normalScale?: number; emissive?: number } = {}) {
+  const material = new THREE.MeshStandardMaterial({
+    map: assets.textures.get(`${set}_diff`), normalMap: assets.textures.get(`${set}_nor`), roughnessMap: cheap ? null : assets.textures.get(`${set}_rough`),
+    color: opts.color ?? 0xffffff, roughness: opts.roughness ?? 1, metalness: opts.metalness ?? 0,
+    normalScale: new THREE.Vector2(opts.normalScale ?? 1, opts.normalScale ?? 1), vertexColors: true,
+  });
+  if (opts.emissive) material.emissive = new THREE.Color(opts.emissive);
+  return material;
+}
+
+/** Pull the shared trim-sheet material out of a kit piece so procedural blocks can reuse it. */
+export function kitMaterial(assets: Assets, model: string): THREE.MeshStandardMaterial | undefined {
+  let found: THREE.MeshStandardMaterial | undefined;
+  assets.props.get(model)?.traverse(o => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (m && !found) found = m; });
+  return found;
+}
+
+/** Animated hexagonal energy field used for spawn shields. */
+export function shieldMaterial(color: THREE.Color) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    uniforms: { time: { value: 0 }, color: { value: color } },
+    vertexShader: 'varying vec3 vP; varying vec2 vUv; void main(){ vUv = uv; vP = (modelMatrix * vec4(position,1.)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vP,1.); }',
+    fragmentShader: `uniform float time; uniform vec3 color; varying vec3 vP; varying vec2 vUv;
+      float hex(vec2 p){ p.x *= 1.1547; p.y += mod(floor(p.x), 2.0) * 0.5; p = abs(fract(p) - 0.5); return abs(max(p.x * 1.5 + p.y, p.y * 2.0) - 1.0); }
+      void main(){
+        float h = hex(vec2(vP.z + vP.x, vP.y) * 1.6);
+        float edge = smoothstep(0.1, 0.0, h);
+        float scan = 0.5 + 0.5 * sin(vP.y * 3.0 - time * 2.5);
+        float fade = smoothstep(0.0, 0.15, vUv.y) * smoothstep(1.0, 0.85, vUv.y);
+        gl_FragColor = vec4(color * (0.12 + edge * 0.55 + scan * 0.08), (0.12 + edge * 0.5) * fade);
+      }`,
+  });
+}

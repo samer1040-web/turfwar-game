@@ -1,0 +1,609 @@
+/* ---------- Home page / lobby: the city full screen, the menu over it ----------
+ * Home: the live 3D street fills the screen; the big title and a short menu sit bottom-left (Quick
+ * Play as the one white button, then 邀請朋友, 開設房間, 加入房間, Solo, Practice); the profile chip
+ * (callsign · level; its popover holds the callsign, progress, team and server) and the icon buttons
+ * top-right; the latest update bottom-right. Pages (開設房間, 加入房間): the city dims and blurs, the
+ * title shrinks to the mark top-left (the way back), and the page opens in one dark panel beside the
+ * menu. No glow, no neon: white text, grey labels, a selected option is a white chip, the main action a
+ * white button. The map picker and Solo's options are popovers (bottom sheets on phones).
+ */
+/* The lobby and its dialogs are set in Oswald (Latin) and Noto Sans TC (Chinese). */
+#menu, .lb-settings.lobby, .share-panel, .challenge-banner, .ask-dialog {
+  --font: 'Oswald', 'Noto Sans TC', 'Noto Sans TC Extra', 'PingFang TC', 'Microsoft JhengHei', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font);
+}
+#menu {
+  --accent: #ffffff; --line: rgba(255, 255, 255, 0.14); --muted: #a9b1b6; --glass: rgba(10, 12, 14, 0.74);
+  --side: clamp(300px, 30 * var(--vw), 420px); --pad: clamp(24px, 3.4 * var(--vw), 56px);
+  position: fixed; inset: 0; z-index: 5;
+  display: grid; grid-template-columns: var(--side) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; column-gap: clamp(20px, 2.4 * var(--vw), 40px);
+  padding: 0 var(--pad);
+  background:
+    linear-gradient(90deg, rgba(5, 7, 9, 0.72) 0, rgba(5, 7, 9, 0.35) calc(var(--side) + 120px), rgba(5, 7, 9, 0) 62%),
+    linear-gradient(0deg, rgba(5, 7, 9, 0.6) 0, rgba(5, 7, 9, 0) 34%),
+    linear-gradient(180deg, rgba(5, 7, 9, 0.45) 0, rgba(5, 7, 9, 0) 120px);
+}
+/* A page dims and blurs the city behind it. */
+/* (Only on a page: a backdrop blur costs a full-screen read of the 3D canvas every frame, even while transparent.) */
+#menu::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; display: none; background: rgba(5, 7, 9, 0.5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+#menu:not([data-tab='quick'])::before { display: block; }
+#menu :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#menu input:focus-visible { outline: none; }
+#menu .label { font-size: 11px; letter-spacing: 0.2em; color: var(--muted); font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+#menu .mtag { color: var(--accent); letter-spacing: 0.02em; }
+#menu .swat { color: var(--aegis); }
+#menu .militia { color: var(--crimson); }
+#menu .dot { color: var(--muted); }
+
+/* ---- Top bar: the mark (home: the logo alone; a page: the logo, ‹ and the name, the way back) and the profile and icons ---- */
+#menu .top { grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0 10px; min-width: 0; }
+#menu .mark { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; }
+#menu .mark img { width: 40px; height: 40px; border-radius: 8px; }
+#menu .mark-back, #menu .mark-name { display: none; }
+#menu[data-tab='quick'] .mark { cursor: default; }
+#menu:not([data-tab='quick']) .mark-back { display: block; font-size: 26px; font-weight: 600; line-height: 1; color: var(--muted); }
+#menu:not([data-tab='quick']) .mark-name { display: block; font-family: 'Noto Sans TC', var(--font); font-size: 22px; font-weight: 900; letter-spacing: 0.08em; }
+#menu:not([data-tab='quick']) .mark:hover .mark-back { color: var(--ink); }
+#menu .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#menu .profile {
+  display: flex; align-items: center; gap: 8px; height: 40px; max-width: 280px; padding: 0 10px 0 14px;
+  border: 1px solid var(--line); background: rgba(10, 12, 14, 0.6); color: var(--ink); font-size: 15px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; transition: border-color 0.15s;
+}
+#menu .profile b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#menu .profile #profile-lv { flex: none; font-size: 13px; color: var(--muted); letter-spacing: 0.08em; }
+#menu .profile .caret { width: 14px; height: 14px; margin-left: 2px; stroke: var(--muted); }
+#menu .profile:hover, #menu .profile[aria-expanded='true'] { border-color: rgba(255, 255, 255, 0.4); }
+#menu .icons { display: flex; gap: 8px; }
+#menu .icon-btn {
+  position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+  border: 1px solid var(--line); background: rgba(10, 12, 14, 0.6); color: var(--ink); font-size: 18px; font-weight: 700; line-height: 1; transition: border-color 0.15s, background 0.15s;
+}
+#menu .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+#menu .icon-btn:hover { border-color: rgba(255, 255, 255, 0.4); background: rgba(10, 12, 14, 0.8); }
+/* Tooltip: the button's name, under it. */
+#menu .icon-btn::after {
+  content: attr(data-tip); position: absolute; top: calc(100% + 6px); right: 0; z-index: 3; padding: 3px 8px; white-space: nowrap; pointer-events: none;
+  border: 1px solid var(--line); background: rgba(10, 12, 14, 0.94); color: var(--ink);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0; transform: translateY(-2px); transition: opacity 0.12s, transform 0.12s;
+}
+#menu .icon-btn:hover::after, #menu .icon-btn:focus-visible::after { opacity: 1; transform: none; }
+#menu a.icon-btn { text-decoration: none; }
+#menu .icon-btn.discord svg { fill: currentColor; stroke: none; }
+#menu .icon-btn.discord:hover, #menu .icon-btn.discord:focus-visible { color: #8b95ff; border-color: rgba(88, 101, 242, 0.75); }
+
+/* ---- The profile popover: callsign, level and the day's goal (src/ui/progressbadge.ts), team, server ---- */
+#menu #profile-pop { width: 320px; }
+#menu .callsign { display: flex; flex-direction: column; gap: 6px; }
+#menu .callsign input {
+  height: 42px; padding: 0 12px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.35); color: var(--ink);
+  font-size: 17px; font-weight: 700; letter-spacing: 0.04em; outline: none; transition: border-color 0.15s;
+}
+#menu .callsign input:focus { border-color: rgba(255, 255, 255, 0.6); }
+#menu .prog { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; font-size: 13px; font-weight: 700; color: var(--muted); }
+#menu .prog .lv { color: var(--ink); }
+#menu .prog .bar { position: relative; height: 5px; background: rgba(255, 255, 255, 0.12); }
+#menu .prog .bar i { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
+#menu .prog .goal { grid-column: 1 / -1; }
+#menu .prog .streak { grid-column: 1 / -1; color: var(--cash); }
+#menu .prog .goal b { color: var(--ink); }
+#menu .prog.done .goal b { color: var(--cash); }
+#menu #profile-pop .segmented { height: 40px; }
+#menu #profile-pop .server-chip { align-self: flex-start; padding: 6px 10px; font-size: 13px; }
+
+/* ---- Home: the title and the menu, bottom-left over the city ---- */
+#menu .side { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; justify-content: center; gap: 14px; min-height: 0; padding-bottom: 4vh; }
+#menu .logo { display: flex; flex-direction: column; gap: 10px; margin: 0 0 clamp(12px, 3vh, 36px); line-height: 1; white-space: nowrap; text-shadow: 0 4px 30px rgba(0, 0, 0, 0.55); }
+#menu .logo-name { display: flex; align-items: baseline; font-weight: 700; font-size: clamp(44px, 5.2 * var(--vw), 92px); letter-spacing: 0.04em; text-transform: uppercase; }
+#menu .logo-name em { font-style: normal; color: #7ff6ff; margin-left: 0.24em; }
+#menu .logo-name.cjk { font-family: 'Noto Sans TC', var(--font); font-weight: 900; letter-spacing: 0.06em; font-size: clamp(52px, 6 * var(--vw), 104px); }
+#menu .logo-name.cjk em { margin-left: 0; }
+#menu .logo-sub { display: flex; padding-left: 0.3em; color: var(--ink); font-size: clamp(14px, 1.15 * var(--vw), 20px); font-weight: 700; letter-spacing: 0.42em; text-transform: uppercase; }
+#menu .logo-alt.cjk { font-family: 'Noto Sans TC', var(--font); font-weight: 900; letter-spacing: 0.3em; }
+#menu .logo-sub > i, #menu .logo-sub > span:not(.logo-alt) { display: none; }
+#menu:not([data-tab='quick']) .logo { display: none; }
+
+/* The menu: Quick Play, the one white button; then plain lines of text. */
+#menu .ways { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+#menu .deploy {
+  display: inline-flex; align-items: center; gap: 14px; min-width: 0; max-width: 100%; min-height: 60px; padding: 0 22px 0 26px;
+  border: 1px solid #fff; background: #fff; color: #0a0b0c; transition: background 0.15s, transform 0.15s;
+}
+#menu .deploy::after { content: '›'; flex: none; font-size: 30px; font-weight: 600; line-height: 1; margin-top: -3px; }
+#menu .deploy:hover:not(:disabled) { background: #e9ecee; }
+#menu .deploy:active:not(:disabled) { transform: translateY(1px); }
+#menu .deploy:disabled { background: transparent; color: var(--muted); border-color: var(--line); cursor: not-allowed; }
+#menu .deploy-l { display: flex; align-items: center; min-width: 0; font-size: 27px; font-weight: 800; letter-spacing: 0.14em; white-space: nowrap; }
+#menu .deploy-l svg { display: none; }
+#menu .deploy-r { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; opacity: 0.55; }
+#menu #quick-go .deploy-r { display: none; }
+#menu .deploy.queued { background: transparent; color: var(--ink); border-color: rgba(255, 255, 255, 0.6); }
+#menu #quick-line { margin: 2px 0 12px; }
+/* Under Quick Play only the connection dot and the server: what it will do needs no words. */
+#menu #quick-line .line-text { display: none; }
+#menu .way {
+  position: relative; display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 0 0 4px; border: 0; background: none;
+  color: rgba(255, 255, 255, 0.86); text-align: left; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7); cursor: pointer; transition: color 0.15s, transform 0.15s;
+}
+#menu .way b { font-size: clamp(22px, 1.7 * var(--vw), 28px); font-weight: 700; letter-spacing: 0.12em; white-space: nowrap; }
+#menu .way:hover:not(:disabled) { color: #fff; transform: translateX(4px); }
+#menu .way:disabled { opacity: 0.45; cursor: not-allowed; }
+#menu .way[hidden] { display: none; }
+#menu .way[aria-current='page'], #menu .way[aria-expanded='true'] { color: #fff; }
+#menu .way[aria-current='page']::before { content: ''; position: absolute; left: -16px; top: 12px; bottom: 12px; width: 3px; background: #fff; }
+/* On a page the menu dims, the open page's line stays white. */
+#menu:not([data-tab='quick']) .way:not([aria-current='page']) { color: rgba(255, 255, 255, 0.55); }
+/* 邀請朋友's corner: friends toward the 金拖. */
+#menu .ig-goal {
+  padding: 4px 9px 4px 30px; font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: #ffd27a; white-space: nowrap; text-shadow: none;
+  border: 1px solid rgba(255, 196, 90, 0.4); background: rgba(10, 12, 14, 0.7) 7px center / 20px 12px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='8 2 32 16'%3E%3Cpath d='M10 10c0-4.5 3-6.5 8-6.5h11c5.5 0 9.5 2.6 9.5 6.5s-4 6.5-9.5 6.5H18c-5 0-8-2-8-6.5z' fill='%23ffe7a3' stroke='%23a8740f' stroke-width='1.6'/%3E%3Cpath d='M26 3.6c1.6 2 1.6 10.8 0 12.8M30.5 3.8c1.6 2 1.6 10.4 0 12.4' stroke='%23e8b42a' stroke-width='3.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+#menu .ig-goal.done { color: var(--cash); border-color: rgba(156, 240, 138, 0.45); }
+
+/* ---- Pages: one dark panel beside the menu ---- */
+#menu .page { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: 0; padding-bottom: 4vh; }
+#menu .view {
+  display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 980px; min-height: 0; max-height: 100%; overflow-y: auto;
+  padding: clamp(20px, 2.4 * var(--vw), 36px); border: 1px solid rgba(255, 255, 255, 0.1); background: var(--glass);
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+#menu .view[hidden] { display: none; }
+#menu .page-head { display: flex; align-items: baseline; gap: 16px; margin: 0 0 4px; font-family: 'Noto Sans TC', var(--font); font-size: clamp(28px, 2.4 * var(--vw), 40px); font-weight: 900; letter-spacing: 0.06em; }
+#menu .page-head .count { font-family: var(--font); font-size: 14px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); }
+#menu #view-start .deploy { align-self: flex-start; margin-top: 4px; }
+
+/* ---- Segmented choices (filters, team, popover options) ---- */
+#menu .choices { display: grid; }
+#menu .choice {
+  display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; padding: 8px 6px; text-align: center; align-items: center;
+  border: none; background: transparent; transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+#menu .choice:hover:not(:disabled) { background: rgba(127, 246, 255, 0.06); }
+#menu .choice b { font-size: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+#menu .choice small { color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+#menu .choice[aria-pressed='true'] { background: rgba(127, 246, 255, 0.12); box-shadow: inset 0 -2px 0 var(--accent); color: var(--accent); }
+#menu .choice[aria-pressed='true'] small { color: rgba(127, 246, 255, 0.75); }
+#menu .choice:disabled { opacity: 0.4; cursor: not-allowed; }
+#menu .choices.segmented { grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+#menu .segmented .choice + .choice { border-left: 1px solid var(--line); }
+
+
+
+/* Filters: label column, then the controls. */
+#menu .filters { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; align-items: center; }
+#menu .frow { display: contents; }
+#menu .filters .segmented { height: 44px; }
+#menu .sizes .choice { padding: 4px; }
+#menu .sizes .choice b { font-size: 16px; letter-spacing: 0.06em; }
+#menu #smodes .choice b { font-size: 13px; }
+#menu .join-filters .segmented { height: 36px; }
+#menu .join-filters .choice { padding: 4px; }
+#menu .join-filters .choice b { font-size: 12px; }
+
+#menu .mapline { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; height: 44px; }
+#menu .caret { flex: none; width: 16px; height: 16px; margin-left: auto; fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s; }
+/* The map row's note (why the map changed) takes the shortcuts' place for a few seconds. */
+#menu .notice { display: none; flex: 1; min-width: 0; margin: 0; color: var(--amber); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; line-height: 1.25; }
+#menu.noticing .notice { display: block; }
+
+
+#menu .rooms-line { display: flex; align-items: center; gap: 8px; margin: 0; min-height: 18px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: 0.02em; line-height: 1.25; }
+#menu .rooms-line .line-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#menu #start-line .line-text { white-space: normal; }
+#menu .rooms-line > .ping { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#menu .rooms-line > .ping::before { content: '·'; margin-right: 8px; color: var(--muted); }
+#menu .rooms-line > .ping[hidden] { display: none; }
+#menu .rooms-line[hidden] { display: none; }
+/* Quick play's line ends with the server chip (where the ping is elsewhere). */
+#menu .rooms-line .server-chip { margin-left: auto; }
+
+/* Connection dot (status line and room count) */
+#menu .conn { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); white-space: nowrap; min-width: 0; }
+#menu .conn i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+#menu .conn.live i { background: #5df29a; box-shadow: 0 0 8px #5df29a; }
+#menu .conn.live { color: #9be8b9; }
+#menu .conn.wait i { background: var(--amber); animation: lobby-pulse 1s ease-in-out infinite; }
+#menu .conn.off i { background: var(--crimson); }
+@keyframes lobby-pulse { 50% { opacity: 0.3; } }
+
+
+/* ---- Live rooms: fills the panel's spare height (at least three rows), scrolls beyond ---- */
+#menu .browser {
+  flex: 1 1 auto; display: flex; flex-direction: column; min-height: 178px; max-height: 560px;
+  border: 1px solid var(--line); border-radius: 4px; background: rgba(6, 12, 16, 0.72); backdrop-filter: blur(6px); overflow: hidden;
+}
+#menu .browser-head { flex: none; display: flex; align-items: baseline; gap: 10px; padding: 9px 12px 8px; border-bottom: 1px solid rgba(190, 236, 244, 0.1); }
+#menu .browser-head b { font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+#menu .browser-head small { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+#menu .browser-head .count { margin-left: auto; min-width: 0; }
+/* Which server the rooms are on and the round trip to it: "Server · US East · 190 ms". */
+#menu .server-chip { flex: none; display: inline-block; padding: 1px 7px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#menu .server-chip[hidden] { display: none; }
+#menu .browser-head .count:empty + .server-chip { margin-left: auto; }
+#menu .server-chip .server-word { white-space: pre; }
+/* With a choice of servers the chip is a button: it opens Settings on the Server choice. */
+#menu button.server-chip { background: rgba(6, 12, 16, 0.6); line-height: inherit; text-transform: none; transition: border-color 0.15s, color 0.15s; }
+#menu button.server-chip:hover:not(:disabled) { border-color: rgba(127, 246, 255, 0.5); color: var(--ink); }
+#menu button.server-chip:disabled { cursor: default; background: none; }
+#menu .server-chip .caret { display: inline-block; width: 11px; height: 11px; margin: 0 0 0 4px; vertical-align: -1px; stroke: currentColor; stroke-width: 2.6; }
+/* Ping: green under 80 ms, amber under 160 ms, red beyond; muted "—" while measuring. */
+#menu .ping { color: var(--muted); }
+#menu .ping.good { color: #5df29a; }
+#menu .ping.fair { color: var(--amber); }
+#menu .ping.bad { color: var(--crimson); }
+#menu .room .ping { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; font-size: 13px; }
+#menu .room .ping small { font-size: 10px; letter-spacing: 0.04em; opacity: 0.8; }
+#menu .browser-rows { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(190, 236, 244, 0.2) transparent; }
+#menu .browser { container-type: inline-size; }
+#menu .room {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 46px 44px 54px 64px; gap: 8px; align-items: center;
+  height: 46px; padding: 0 10px 0 16px; border-top: 1px solid rgba(190, 236, 244, 0.06); font-size: 14px; font-weight: 600;
+}
+#menu .room:first-child { border-top: none; }
+#menu .room::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 2px; background: var(--swatch, var(--muted)); opacity: 0.85; }
+#menu .room:hover { background: rgba(127, 246, 255, 0.05); }
+/* The room Quick Play would join (Quick Play's list). */
+#menu .room.target { background: rgba(127, 246, 255, 0.07); box-shadow: inset 0 0 0 1px rgba(127, 246, 255, 0.3); }
+/* A full room stays listed, greyed, with FULL in place of JOIN. */
+#menu .room.full > :not(.join) { opacity: 0.5; }
+#menu .room .srv { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-width: 0; white-space: nowrap; }
+#menu .room .srv-name { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; }
+#menu .room .srv b { font-size: 15px; letter-spacing: 0.07em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; }
+#menu .room .fixed { flex: none; display: inline-flex; color: var(--muted); }
+/* A private room: a lock and "Private" by its name; it is joined with its code. */
+#menu .room .priv { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 0 5px; border: 1px solid var(--line); border-radius: 3px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); }
+#menu .room .priv .lock { width: 11px; height: 11px; }
+#menu .lock { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
+#menu .room .mode { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--ink); }
+#menu .room .players { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; color: var(--ink); }
+#menu .room .size { font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; font-size: 13px; letter-spacing: 0.04em; color: var(--muted); }
+#menu .room .state { max-width: 100%; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #5df29a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#menu .room .state.warmup { color: var(--amber); }
+#menu .room .state.ended { color: var(--muted); }
+#menu .room .join { height: 28px; padding: 0; border: 1px solid var(--accent); border-radius: 3px; background: rgba(127, 246, 255, 0.1); color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
+#menu .room .join:hover:not(:disabled) { background: rgba(127, 246, 255, 0.3); }
+#menu .room .join:disabled { color: var(--muted); border-color: var(--line); background: transparent; cursor: not-allowed; }
+#menu .browser .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; min-height: 126px; padding: 16px; text-align: center; color: var(--muted); font-size: 14px; font-weight: 600; letter-spacing: 0.04em; line-height: 1.35; }
+/* What the filters hide: always one line tall, so the box never jumps. */
+#menu .browser-foot { flex: none; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-top: 1px solid rgba(190, 236, 244, 0.08); color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; }
+#menu .browser-foot:empty { visibility: hidden; }
+#menu .browser-foot .dot { opacity: 0.6; }
+#menu .browser .empty p { margin: 0; }
+#menu .empty-go { display: flex; gap: 8px; }
+#menu .empty-go .sub { padding: 0 16px; }
+@container (max-width: 540px) {
+  #menu .room { grid-template-columns: minmax(0, 1fr) 30px 44px 42px 52px 62px; }
+  #menu .room .mname { display: none; }
+}
+@container (max-width: 380px) {
+  #menu .room { grid-template-columns: minmax(0, 1fr) 24px 38px 34px 44px 54px; gap: 6px; padding-left: 12px; }
+  #menu .room .ping small { display: none; }
+  #menu .room .srv b { font-size: 14px; }
+}
+#menu .link { padding: 0 2px; border: none; background: none; color: var(--accent); font-size: inherit; font-weight: 700; letter-spacing: 0.04em; text-decoration: underline; text-decoration-color: rgba(127, 246, 255, 0.4); text-underline-offset: 3px; }
+#menu .link:hover { text-decoration-color: var(--accent); }
+
+/* ---- Join a Server's private room code ---- */
+#menu .code-row { flex: none; display: flex; align-items: center; gap: 12px; }
+#menu .code-row .code-box { flex: 0 1 240px; }
+
+
+#menu .sub {
+  min-width: 0; height: 40px; padding: 0 8px; border: 1px solid var(--line); border-radius: 3px; background: rgba(6, 12, 16, 0.6);
+  font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+#menu .sub:hover:not(:disabled) { border-color: rgba(127, 246, 255, 0.5); background: rgba(127, 246, 255, 0.06); }
+#menu .sub[aria-expanded='true'] { border-color: var(--accent); color: var(--accent); background: rgba(127, 246, 255, 0.1); }
+#menu .sub:disabled { opacity: 0.4; cursor: not-allowed; }
+#menu .code-box { display: flex; align-items: center; min-width: 0; height: 40px; border: 1px solid var(--line); border-radius: 3px; background: rgba(6, 12, 16, 0.6); transition: border-color 0.15s; }
+#menu .code-box:focus-within { border-color: var(--accent); }
+#menu .code-box .hash { flex: none; padding: 0 2px 0 10px; color: var(--muted); font-weight: 700; font-size: 15px; }
+#menu .code-box input { flex: 1; min-width: 0; height: 100%; padding: 0 4px; border: none; background: none; outline: none; font-size: 16px; font-weight: 700; letter-spacing: 0.32em; text-transform: uppercase; }
+#menu .code-box input::placeholder { letter-spacing: 0.12em; color: rgba(159, 179, 185, 0.6); text-transform: uppercase; font-size: 13px; }
+#menu .code-box input:disabled { cursor: not-allowed; }
+#menu .code-go { flex: none; height: 100%; padding: 0 12px; border: none; border-left: 1px solid var(--line); background: rgba(127, 246, 255, 0.1); color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+#menu .code-go:disabled { color: var(--muted); background: transparent; cursor: not-allowed; }
+#menu .unavailable { margin: 0; color: var(--amber); font-size: 13px; line-height: 1.3; font-weight: 600; }
+#menu .unavailable:empty { display: none; }
+/* Clickwrap: pressing Play accepts the Terms and the Privacy Policy (src/game/consent.ts). */
+#menu .clickwrap { margin: 2px 0 0; max-width: 30em; color: var(--muted); font-size: 12px; line-height: 1.35; }
+#menu .clickwrap a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+#menu .clickwrap a:hover { color: var(--ink); }
+
+/* Status line (connecting, errors) under the panel, only when there is something to say. */
+#menu .status { margin: -4px 0 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 3px; background: rgba(4, 9, 12, 0.85); font-size: 13px; color: var(--ink); letter-spacing: 0.06em; font-weight: 600; }
+#menu .status:empty { display: none; }
+#menu .status .graphics-help { display: grid; gap: 6px; letter-spacing: 0.02em; }
+#menu .status .graphics-help strong { color: var(--amber); }
+#menu .status .graphics-help p { margin: 0; font-weight: 500; line-height: 1.45; }
+#menu .status .graphics-help .more { color: var(--muted); }
+#menu .status .graphics-help button { justify-self: start; margin-top: 4px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 3px; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+
+/* ---- Server unreachable (src/net/connect.ts): after 30 s of trying, a calm card under the tabs, never a red
+   error: "Can't reach the server" with Retry. ---- */
+#menu .unreachable {
+  flex: none; display: flex; flex-direction: column; gap: 9px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 4px; background: rgba(6, 12, 16, 0.84); backdrop-filter: blur(6px);
+}
+#menu .unreachable[hidden] { display: none; }
+#menu .unreachable-say { display: flex; flex-direction: column; gap: 5px; }
+#menu .unreachable-head { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+#menu .unreachable-head .conn { flex: none; }
+#menu .unreachable p { margin: 0; color: var(--ink); opacity: 0.9; font-size: 14px; font-weight: 500; line-height: 1.4; }
+#menu .unreachable-retry { align-self: flex-start; padding: 0 22px; }
+/* The amber dot: still, after giving up (not the red of an error). */
+#menu .conn.down i { background: var(--amber); }
+/* A big button whose action waits for the server: outlined, so it reads as pending rather than ready. */
+@media (prefers-reduced-motion: reduce) { #menu .conn.wait i { animation: none; } }
+
+/* ---- Popovers ---- */
+#menu .pop {
+  position: fixed; z-index: 20; display: flex; flex-direction: column; gap: 12px; width: 340px; max-width: calc(100 * var(--vw) - 24px); padding: 14px;
+  border: 1px solid rgba(127, 246, 255, 0.45); border-radius: 4px; background: rgba(6, 12, 16, 0.96); backdrop-filter: blur(10px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+#menu .pop[hidden] { display: none; }
+#menu .pop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; }
+#menu .pop-head b { font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+#menu .pop-head small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+#menu .pop .field { display: flex; flex-direction: column; gap: 6px; }
+#menu .pop .segmented { height: 38px; }
+#menu .pop .segmented .choice b { font-size: 12px; }
+#menu .go {
+  width: 100%; height: 44px; font-size: 16px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+  border: 1px solid var(--accent); border-radius: 3px; color: #031014; background: var(--accent);
+  box-shadow: 0 0 22px rgba(127, 246, 255, 0.22); transition: filter 0.15s, box-shadow 0.15s;
+}
+#menu .go:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 0 30px rgba(127, 246, 255, 0.36); }
+#menu .go:disabled { color: var(--muted); border-color: var(--line); background: transparent; box-shadow: none; cursor: not-allowed; }
+#menu .hint { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.35; font-weight: 500; }
+
+/* Map picker: a card grid; maps the mode cannot host are shown but disabled. */
+#menu #map-pop { width: min(700px, calc(100 * var(--vw) - 24px)); max-height: calc(100 * var(--vh) - 24px); }
+#menu .map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; min-height: 0; overflow-y: auto; padding: 2px; scrollbar-width: thin; scrollbar-color: rgba(190, 236, 244, 0.2) transparent; }
+#menu .mcard {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 6px 6px 7px; text-align: left;
+  border: 1px solid var(--line); border-radius: 3px; background: rgba(255, 255, 255, 0.03); transition: border-color 0.15s, background 0.15s;
+}
+#menu .mcard:hover:not(:disabled) { border-color: rgba(127, 246, 255, 0.55); background: rgba(127, 246, 255, 0.06); }
+#menu .mcard[aria-pressed='true'] { border-color: var(--accent); background: rgba(127, 246, 255, 0.12); box-shadow: inset 0 0 0 1px var(--accent); }
+#menu .mcard:disabled { opacity: 0.38; cursor: not-allowed; }
+/* The map's screenshot (16:9, so every card is the same height), or its plan when there is none; the theme colour under it. */
+#menu .mcard .thumb { display: block; aspect-ratio: 16 / 9; margin-bottom: 4px; border-radius: 2px; overflow: hidden; background: rgba(4, 9, 12, 0.9); border-bottom: 2px solid var(--swatch, var(--muted)); }
+/* (style.css pins every canvas full-screen for the renderer; thumbnails sit in their card.) */
+#menu .mcard .thumb canvas, #menu .mcard .thumb img { position: static; inset: auto; display: block; width: 100%; height: 100%; object-fit: cover; }
+#menu .mcard small { min-height: 1.3em; }
+#menu .mcard .any-thumb { display: grid; place-items: center; border-bottom-color: var(--accent); background: radial-gradient(circle at 50% 50%, rgba(127, 246, 255, 0.14), rgba(4, 9, 12, 0.9) 70%); }
+#menu .mcard .any-thumb svg { width: 34px; height: 34px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#menu .mcard b { font-size: 14px; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+#menu .mcard small { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px; }
+#menu .mcard .live { display: flex; align-items: center; gap: 6px; padding: 0 2px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); white-space: nowrap; }
+#menu .mcard .live.on { color: #9be8b9; }
+#menu .mcard .live i { width: 6px; height: 6px; border-radius: 50%; background: #5df29a; box-shadow: 0 0 6px #5df29a; }
+
+/* Bottom sheet on phones. */
+#menu .pop.sheet { left: 0 !important; right: 0; bottom: 0; top: auto !important; width: auto; max-width: none; max-height: calc(80 * var(--vh)); border-radius: 10px 10px 0 0; border-bottom: none; padding: 16px 16px max(16px, env(safe-area-inset-bottom)); }
+#menu #map-pop.sheet { width: auto; max-height: calc(80 * var(--vh)); }
+#menu .pop.sheet .map-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Map swatches (src/ui/mapthumb.ts has the same colours). */
+#menu [data-theme='desert'] { --swatch: #d9a75e; }
+#menu [data-theme='snow'] { --swatch: #cfe8f2; }
+#menu [data-theme='forest'] { --swatch: #7fc56b; }
+#menu [data-theme='dusk'] { --swatch: #f0a560; }
+#menu [data-theme='twilight'] { --swatch: #8aa6c8; }
+#menu [data-theme='steppe'] { --swatch: #d8c9a4; }
+#menu [data-theme='meadow'] { --swatch: #8fc46a; }
+#menu [data-theme='taipei'] { --swatch: #ff5ad8; }
+#menu [data-theme='xinyi'] { --swatch: #5fd0c0; }
+#menu [data-theme='highrise'] { --swatch: #f2c06a; }
+#menu [data-theme='memorial'] { --swatch: #3a6ad0; }
+#menu [data-theme='sanchong'] { --swatch: #e8884a; }
+
+
+/* ---- The latest update (src/ui/news.ts): one quiet line, bottom-right ---- */
+#menu .news { grid-column: 2; grid-row: 3; justify-self: end; display: flex; align-items: baseline; gap: 14px; max-width: 640px; padding: 0 0 28px; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8); }
+#menu .news[hidden] { display: none; }
+#menu .news-head { flex: none; display: flex; align-items: center; gap: 8px; padding-right: 14px; border-right: 1px solid var(--line); font-size: 13px; font-weight: 700; letter-spacing: 0.12em; color: #7ff6ff; }
+#menu .news-head b { color: inherit; }
+#menu .news-new { padding: 0 6px; background: #ffd27a; color: #120c04; font-size: 10px; letter-spacing: 0.12em; line-height: 16px; text-shadow: none; }
+#menu .news-head time { display: none; }
+#menu .news p { margin: 0; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+#menu:not([data-tab='quick']) .news { display: none; }
+
+/* ---- Footer links: quiet, bottom-left ---- */
+#menu .site-links {
+  grid-column: 1; grid-row: 3; align-self: end; display: flex; align-items: center; gap: 8px; padding: 0 0 28px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.12em; color: var(--muted); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+}
+#menu .site-links a { display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px; color: inherit; text-decoration: none; transition: color 0.15s; }
+#menu .site-links a:hover { color: var(--ink); }
+#menu .site-links svg { width: 14px; height: 14px; fill: currentColor; }
+#menu .site-links .dot { opacity: 0.6; }
+
+/* 開設房間's maps: one row of picture cards that scrolls sideways. */
+#menu #view-start .mapline { flex-direction: column; align-items: stretch; height: auto; gap: 6px; }
+#menu #solo-pop { width: min(560px, calc(100 * var(--vw) - 24px)); }
+#menu #solo-pop .segmented { height: 40px; }
+#menu #solo-maps { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 132px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 8px; }
+#menu #view-start .map-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: clamp(136px, 12 * var(--vw), 176px); overflow-x: auto; overflow-y: hidden; padding: 2px 2px 8px; }
+#menu .mcard { border-color: rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.03); }
+#menu .mcard:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.06); }
+#menu .mcard[aria-pressed='true'] { border-color: #fff; background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 1px #fff; }
+#menu .mcard .thumb { border-bottom: 0; }
+
+/* The quick line's server chip and the popovers: plain, on the glass. */
+#menu .pop { border-color: rgba(255, 255, 255, 0.16); background: rgba(10, 12, 14, 0.94); }
+#menu .pop-head b { color: var(--ink); }
+#menu .go { color: #0a0b0c; background: #fff; border-color: #fff; box-shadow: none; }
+#menu .go:hover:not(:disabled) { filter: none; background: #e9ecee; box-shadow: none; }
+#menu .choice[aria-pressed='true'] { background: #fff; color: #0a0b0c; box-shadow: none; }
+#menu .choice[aria-pressed='true'] small, #menu .choice[aria-pressed='true'] .mtag { color: rgba(10, 11, 12, 0.6); }
+#menu .choice[aria-pressed='true'] .swat, #menu .choice[aria-pressed='true'] .militia { color: inherit; }
+#menu .choice:hover:not(:disabled):not([aria-pressed='true']) { background: rgba(255, 255, 255, 0.07); }
+
+/* ---- Shorter screens ---- */
+@media (max-height: 760px) and (min-width: 901px) {
+  #menu .top { padding-top: 14px; }
+  #menu .side { gap: 8px; }
+  #menu .way { min-height: 44px; }
+  #menu .deploy { min-height: 52px; }
+}
+
+/* ---- Narrow screens (upright phones, small windows): one scrolling column ---- */
+@media (max-width: 900px) {
+  #menu { display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; padding: 0 16px; background: rgba(5, 7, 9, 0.55); }
+  #menu .top { padding: 14px 0 6px; }
+  #menu .profile { max-width: 160px; }
+  #menu .side { flex: none; padding: 18px 0 10px; }
+  #menu .logo-name.cjk { font-size: clamp(44px, 13 * var(--vw), 72px); }
+  #menu .page { flex: none; padding: 0 0 12px; }
+  #menu .view { max-height: none; overflow: visible; padding: 18px 16px; }
+  #menu .browser { flex: none; min-height: 0; }
+  #menu .browser-rows { flex: none; min-height: 126px; max-height: calc(50 * var(--vh)); }
+  #menu .news { justify-self: auto; padding: 8px 0 12px; }
+  #menu .site-links { justify-content: center; padding: 0 0 24px; }
+  #menu:has(> .install-hint:not([hidden])) .site-links { padding-bottom: 220px; }
+}
+@media (max-width: 560px) {
+  #menu .icons { gap: 6px; }
+  #menu .icon-btn, #menu .profile { height: 40px; }
+  #menu .icon-btn { width: 40px; }
+  #menu .filters { grid-template-columns: 1fr; gap: 6px; }
+  #menu .frow > .label { margin-top: 4px; }
+  #menu .mapline { height: auto; flex-wrap: wrap; }
+  #menu .rooms-line { flex-wrap: wrap; }
+  #menu .rooms-line .line-text { white-space: normal; flex: 1 1 0; }
+  #menu .browser-head .server-chip .server-word { display: none; }
+  #menu .browser-head { flex-wrap: wrap; align-items: center; row-gap: 4px; }
+  #menu .code-row { flex-wrap: wrap; gap: 6px; }
+  #menu .code-row .label, #menu .code-row .code-box { flex: 1 1 100%; }
+}
+
+/* ---- Phones sideways (and other short screens): the menu on the left, the city (or the open page) on the right ----
+ * Home keeps the city clear beside a compact menu; a page takes the right side and scrolls by itself
+ * while the menu stays in reach. Every control is a 44 px target; the notch and home indicator are kept clear.
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  #menu {
+    --side: clamp(210px, 30 * var(--vw), 280px);
+    display: grid; overflow: hidden; column-gap: 14px; grid-template-rows: auto minmax(0, 1fr) auto;
+    padding: var(--safe-t) max(12px, var(--safe-r)) 0 max(14px, var(--safe-l));
+  }
+  #menu .top { padding: 8px 0 2px; }
+  #menu .mark img { width: 32px; height: 32px; }
+  #menu .profile, #menu .icon-btn { height: 44px; }
+  #menu .icon-btn { width: 44px; }
+  #menu .side { justify-content: flex-start; gap: 0; padding: 0 0 max(6px, var(--safe-b)); overflow-y: auto; scrollbar-width: none; }
+  /* No room for the big title: the name sits in the top bar beside the mark, home or not. */
+  #menu .logo { display: none; }
+  #menu .mark .mark-name { display: block; font-family: 'Noto Sans TC', var(--font); font-size: 20px; font-weight: 900; letter-spacing: 0.08em; }
+  #menu .side { padding-top: 6px; }
+  #menu .deploy { min-height: 48px; padding: 0 16px 0 18px; }
+  #menu .deploy-l { font-size: 20px; }
+  #menu .deploy::after { font-size: 24px; }
+  #menu #quick-line { display: none; }
+  #menu .deploy { margin-bottom: 4px; }
+  #menu .way { min-height: 44px; }
+  #menu .way b { font-size: 17px; }
+  #menu .ig-goal { font-size: 12px; padding: 3px 8px 3px 28px; }
+  #menu .page { padding: 0 0 max(8px, var(--safe-b)); justify-content: flex-start; }
+  #menu .view { padding: 14px 16px; gap: 10px; }
+  #menu .page-head { font-size: 22px; margin: 0; }
+  #menu .news { grid-row: 3; padding: 0 0 max(8px, var(--safe-b)); }
+  #menu .news p { font-size: 12px; }
+  #menu .news-head { font-size: 11px; }
+  #menu .site-links { display: none; }
+  #menu .filters { gap: 6px 10px; }
+  #menu .filters .segmented, #menu .join-filters .segmented { height: 44px; }
+  #menu .mapline { height: 44px; }
+  #menu #view-join { container-type: inline-size; }
+  #menu .join-filters { grid-template-columns: auto minmax(0, 1.1fr) auto minmax(0, 1fr); }
+  #menu .browser { flex: none; min-height: 0; max-height: none; overflow: visible; }
+  #menu .browser-rows { flex: none; min-height: 0; max-height: none; overflow: visible; }
+  #menu .room { height: 52px; padding-right: 6px; }
+  #menu .room .join { height: 44px; }
+  #menu .code-row .code-box { flex: 1 1 220px; max-width: 280px; height: 46px; }
+  #menu .code-go { min-width: 64px; }
+  .install-hint {
+    left: auto; right: max(12px, var(--safe-r)); bottom: max(6px, var(--safe-b)); transform: none;
+    width: min(560px, calc(100 * var(--vw) - var(--side) - 40px - var(--safe-l) - var(--safe-r)));
+    grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; padding: 4px 4px 4px 12px;
+  }
+  .install-hint .mark, .install-hint b, .install-hint:not(.tip-only) p.tip { display: none; }
+  .install-hint p, .install-hint.tip-only p.tip {
+    grid-column: 1; grid-row: 1; font-size: 12px; line-height: 1.25;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .install-hint .acts { grid-column: 2; grid-row: 1; }
+  @container (max-width: 720px) { #menu .join-filters .jname { display: none; } }
+  @container (max-width: 560px) {
+    #menu .room { grid-template-columns: minmax(0, 1fr) 30px 40px 40px 50px 64px; gap: 6px; padding-left: 12px; }
+    #menu .room .ping { justify-self: end; padding: 1px 5px; border: 1px solid currentColor; border-radius: 9px; font-size: 11px; line-height: 1.2; }
+    #menu .room .ping small { display: none; }
+  }
+}
+
+/* ---------- The lobby's one-question dialog (src/ui/ask.ts): the first callsign, a private room's code ---------- */
+.ask-dialog { position: fixed; inset: 0; z-index: 12; display: grid; place-items: center; padding: 12px; background: rgba(3, 7, 10, 0.6); backdrop-filter: blur(3px); }
+.ask-dialog { --accent: #ffffff; --line: rgba(255, 255, 255, 0.14); }
+.ask-dialog .panel {
+  width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 18px 20px 20px;
+  background: rgba(10, 12, 14, 0.95); border: 1px solid rgba(255, 255, 255, 0.16); color: var(--ink);
+}
+.ask-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ask-dialog h2 { margin: 0; font-size: 20px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); }
+.ask-dialog .x { display: grid; place-items: center; width: 40px; height: 40px; flex: none; padding: 0; font: inherit; color: var(--muted); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; }
+.ask-dialog .x:hover { color: var(--ink); }
+.ask-dialog .why { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.ask-dialog input {
+  height: 48px; padding: 0 12px; font: inherit; font-size: 18px; font-weight: 600; letter-spacing: 0.04em; color: var(--ink);
+  background: rgba(6, 12, 16, 0.75); border: 1px solid var(--line); border-radius: 3px; outline: none;
+}
+.ask-dialog input:focus { border-color: var(--accent); }
+.ask-dialog .err { margin: -4px 0 0; font-size: 12px; color: #ffb35c; }
+.ask-dialog .err[hidden] { display: none; }
+.ask-dialog .go { height: 48px; font: inherit; font-size: 16px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: #0a0b0c; background: var(--accent); border: 0; cursor: pointer; }
+/* Phones sideways: the keyboard takes most of the height, so keep the dialog compact and near the top. */
+:where(.view-low) .ask-dialog { place-items: start center; padding-top: max(8px, var(--safe-t)); }
+:where(.view-low) .ask-dialog .panel { gap: 8px; padding: 10px 14px 12px; }
+:where(.view-low) .ask-dialog h2 { font-size: 16px; }
+:where(.view-low) .ask-dialog .why { font-size: 12px; }
+:where(.view-low) .ask-dialog input, :where(.view-low) .ask-dialog .go { height: 42px; }
+
+/* The dialog's yes/no row (confirmDialog): Keep playing (default) and Leave. */
+.ask-dialog .choices { display: flex; gap: 10px; }
+.ask-dialog .choices button { flex: 1; height: 48px; font: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; cursor: pointer; }
+.ask-dialog .choices .stay { color: var(--ink); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.ask-dialog .choices .stay:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ask-dialog .go.danger { color: #fff; background: rgba(255, 90, 74, 0.85); border: 0; }
+:where(.view-low) .ask-dialog .choices button { height: 42px; }
+
+/* The browser lost the graphics context (src/errors.ts): a reload is the way back. */
+.gfx-lost { position: fixed; left: 50%; top: 16px; z-index: 30; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; max-width: calc(100 * var(--vw) - 32px); padding: 12px 16px;
+  background: rgba(7, 13, 18, 0.95); border: 1px solid var(--crimson); color: var(--ink); font-weight: 600; font-size: 14px; }
+.gfx-lost p { margin: 0; }
+.gfx-lost button { flex: none; height: 38px; padding: 0 14px; font: inherit; font-weight: 700; color: #031013; background: var(--accent); border: 0; cursor: pointer; }
+
+
+/* English in Oswald: a condensed face, set with a little air on the big lines. */
+:lang(en) #menu .way b, :lang(en) #menu .deploy-l { letter-spacing: 0.02em; }
+:lang(en) #menu .logo-name { letter-spacing: 0.01em; }
+:lang(en) #menu .mark-name, :lang(en) #menu .page-head, :lang(en) .lb-settings.lobby.skins-dialog h2 { letter-spacing: 0.01em; }
+:lang(en) #menu .choice b, :lang(en) #menu .label, :lang(en) #menu .pop-head b { letter-spacing: 0.06em; }
+/* Oswald's tall ascenders: two-line choices keep a tight line height so the second line is never clipped. */
+#menu .choice b, #menu .choice small, .lb-settings.lobby .seg button { line-height: 1.15; }
+
+/* ---- CrazyGames build: the first-visit privacy note (src/ui/privacynotice.ts), under the top bar, clear of the menu ---- */
+#menu .privacy-notice {
+  position: absolute; right: 20px; top: 76px; z-index: 5; max-width: 340px; padding: 12px 14px;
+  border: 1px solid var(--line); background: var(--glass); color: var(--ink); font-size: 13px; line-height: 1.4;
+}
+#menu .privacy-notice p { margin: 0 0 10px; }
+/* An invite or challenge banner takes the top of the lobby: the note waits until it is gone. */
+#menu:has(.challenge-banner) .privacy-notice { display: none; }
+#menu .privacy-notice .acts { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#menu .privacy-notice a { color: #7ff6ff; font-weight: 700; }
+#menu .privacy-notice button {
+  padding: 4px 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.08); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+}

@@ -1,0 +1,527 @@
+import { constantTimeEqual, sha256Hex } from '../../shared/sha256';
+import { median, perMinute, type NetDay } from '../../shared/netstats';
+import type { PlayStore } from '../../shared/playtime';
+import { taipeiDay, taipeiDayOfHour } from '../../shared/taipei';
+
+/** Separate collection sink: never changes the lifetime, UTC-day or hourly store's credit. */
+export interface TaipeiPlaySink<K> {
+  startedAt(): bigint;
+  active(id: K, day: number): void;
+  addDay(id: K, day: number, seconds: number): void;
+}
+
+/** Mirror hourly credit into Taipei days, excluding time before collection began (including open upgrade stretches). */
+export function taipeiPlayStore<K>(base: PlayStore<K>, sink: TaipeiPlaySink<K>, now: bigint): PlayStore<K> {
+  const starts = new Map<K, bigint>();
+  const currentDay = taipeiDay(Number(now / 1000n));
+  return {
+    ...base,
+    get: id => {
+      sink.startedAt(); // A first post-upgrade flush starts coverage even without credited seconds.
+      const row = base.get(id);
+      starts.set(id, row?.since ?? 0n);
+      if (row && row.since > 0n) sink.active(id, currentDay);
+      return row;
+    },
+    set: (id, time) => {
+      base.set(id, time);
+      if (time.since > 0n) sink.active(id, currentDay);
+    },
+    addHour: (id, hour, seconds) => {
+      base.addHour?.(id, hour, seconds);
+      const from = starts.get(id) ?? 0n;
+      const hourStart = BigInt(hour) * 3_600_000_000n;
+      const start = from > hourStart ? from : hourStart;
+      // splitHours assigns whole-second endpoints to each hour. Clip conservatively at coverage,
+      // so even a fractional second straddling startedAt is not credited as Taipei history.
+      const end = (start / 1_000_000n + BigInt(seconds)) * 1_000_000n;
+      const coverage = sink.startedAt();
+      const cut = coverage > start ? coverage : start;
+      const credited = coverage <= start ? seconds : Math.max(0, Number((end - cut) / 1_000_000n));
+      if (credited <= 0) return;
+      const day = taipeiDayOfHour(hour);
+      sink.active(id, day);
+      sink.addDay(id, day, credited);
+    },
+  };
+}
+
+/** A `player_hour` row (identity hex): presence, play seconds and folded net reports in one UTC hour. */
+export interface HourRecord { id: string; hour: number; seconds: number; reports: number; netSeconds: number; p50Sum: number; p95Sum: number; corrections: number }
+export interface TaipeiRebuild {
+  /** First Taipei day rebuilt wholly from hourly records (undefined: no hourly records). */
+  exactFrom: number | undefined;
+  /** First Taipei day estimated from UTC-day records (undefined: nothing before `exactFrom`). */
+  estimatedFrom: number | undefined;
+  active: Map<string, { id: string; day: number }>;
+  time: Map<string, { id: string; day: number; seconds: number }>;
+  net: Map<string, NetDay & { id: string; day: number }>;
+}
+
+/**
+ * Taipei days from the records kept before Taipei collection began. Taipei is a whole-hour offset,
+ * so every Taipei day whose hours are all in `player_hour` is exact. Earlier days only have UTC-day
+ * rows: UTC day U is hours 0–15 of Taipei day U and 16–23 of Taipei day U + 1. A row whose late hours
+ * are hourly-covered keeps only what those hours do not explain; otherwise it lands on U (most of its
+ * hours), or the true Taipei day of the player's firstSeen when that falls inside it.
+ */
+export function rebuildTaipeiDays(src: {
+  hours: HourRecord[];
+  days: { id: string; day: number }[];
+  time: { id: string; day: number; seconds: number }[];
+  net: (NetDay & { id: string; day: number })[];
+  /** Epoch microseconds per identity hex. */
+  firstSeen: Map<string, bigint>;
+}): TaipeiRebuild {
+  const out: TaipeiRebuild = { exactFrom: undefined, estimatedFrom: undefined, active: new Map(), time: new Map(), net: new Map() };
+  let minHour = Infinity;
+  for (const h of src.hours) minHour = Math.min(minHour, h.hour);
+  const exactFrom = minHour === Infinity ? Infinity : Math.ceil((minHour + 8) / 24);
+  const firstHour = exactFrom * 24 - 8; // UTC hour where `exactFrom` begins
+  out.exactFrom = exactFrom === Infinity ? undefined : exactFrom;
+
+  const mark = (id: string, day: number) => {
+    out.active.set(`${id}:${day}`, { id, day });
+    if (day < exactFrom) out.estimatedFrom = Math.min(out.estimatedFrom ?? day, day);
+  };
+  const addTime = (id: string, day: number, seconds: number) => {
+    if (seconds <= 0) return;
+    const key = `${id}:${day}`, r = out.time.get(key);
+    out.time.set(key, { id, day, seconds: (r?.seconds ?? 0) + seconds });
+  };
+  const addNet = (id: string, day: number, n: NetDay) => {
+    if (n.reports <= 0) return;
+    const key = `${id}:${day}`, r = out.net.get(key);
+    out.net.set(key, {
+      id, day, reports: (r?.reports ?? 0) + n.reports, seconds: (r?.seconds ?? 0) + n.seconds,
+      p50Sum: (r?.p50Sum ?? 0) + n.p50Sum, p95Sum: (r?.p95Sum ?? 0) + n.p95Sum, corrections: (r?.corrections ?? 0) + n.corrections,
+    });
+  };
+
+  // Exact days, and what the hourly records explain of the UTC day that straddles `exactFrom`.
+  const late = new Map<string, { seconds: number; net: NetDay }>();
+  for (const h of src.hours) {
+    if (h.hour < firstHour) continue;
+    const day = taipeiDayOfHour(h.hour), net = { reports: h.reports, seconds: h.netSeconds, p50Sum: h.p50Sum, p95Sum: h.p95Sum, corrections: h.corrections };
+    mark(h.id, day);
+    addTime(h.id, day, h.seconds);
+    addNet(h.id, day, net);
+    if (h.hour < firstHour + 8) {
+      const key = h.id, r = late.get(key) ?? { seconds: 0, net: { reports: 0, seconds: 0, p50Sum: 0, p95Sum: 0, corrections: 0 } };
+      r.seconds += h.seconds;
+      r.net = { reports: r.net.reports + h.reports, seconds: r.net.seconds + h.netSeconds, p50Sum: r.net.p50Sum + h.p50Sum, p95Sum: r.net.p95Sum + h.p95Sum, corrections: r.net.corrections + h.corrections };
+      late.set(key, r);
+    }
+  }
+
+  // Estimated days from UTC rows. `straddle` is the UTC day whose last 8 hours open `exactFrom`.
+  const straddle = exactFrom - 1;
+  const seenDay = (id: string, u: number) => {
+    const at = src.firstSeen.get(id);
+    if (at === undefined) return undefined;
+    const ms = Number(at / 1000n);
+    return Math.floor(ms / 86_400_000) === u ? taipeiDay(ms) : undefined;
+  };
+  const target = (id: string, u: number) => seenDay(id, u) ?? u;
+  const timeOf = new Map(src.time.map(r => [`${r.id}:${r.day}`, r.seconds]));
+  const netOf = new Map(src.net.map(r => [`${r.id}:${r.day}`, r]));
+  for (const { id, day: u } of src.days) {
+    if (u > straddle) continue;
+    let seconds = timeOf.get(`${id}:${u}`) ?? 0, net: NetDay | undefined = netOf.get(`${id}:${u}`);
+    let day = target(id, u);
+    if (u === straddle) {
+      const l = late.get(id);
+      if (l) {
+        seconds = Math.max(0, seconds - l.seconds);
+        net = net && net.reports > l.net.reports ? {
+          reports: net.reports - l.net.reports, seconds: Math.max(0, net.seconds - l.net.seconds), p50Sum: Math.max(0, net.p50Sum - l.net.p50Sum),
+          p95Sum: Math.max(0, net.p95Sum - l.net.p95Sum), corrections: Math.max(0, net.corrections - l.net.corrections),
+        } : undefined;
+        // Active in the early hours only with evidence: time or reports the late hours do not explain, or first seen then.
+        if (seconds <= 0 && !net && seenDay(id, u) !== u) continue;
+      }
+      day = u; // The late hours belong to `exactFrom`, already exact.
+    }
+    mark(id, day);
+    addTime(id, day, seconds);
+    if (net) addNet(id, day, net);
+  }
+  return out;
+}
+
+/**
+ * The owner's admin dashboard (`/admin`), checked inside the module: no owner token anywhere.
+ * The owner holds a secret admin key; only its SHA-256 lives here. `admin_login(key)` hashes the
+ * key and, on a match, adds the caller's identity to the private `admin` table; the `admin_*` views
+ * return data only to identities in that table (empty for everyone else).
+ *
+ * Rotating the key: choose a new key, put its hash below (`printf %s "$NEW_KEY" | shasum -a 256`),
+ * publish the module (`--delete-data=never`), and call `admin_revoke_all` from an admin session so
+ * every browser logged in with the old key has to log in again with the new one.
+ *
+ * This file is pure logic over a small store interface, so tests can run it with a test hash.
+ */
+export const ADMIN_KEY_SHA256 = '636dec36cc64bd40054fd54285fc60948484d414b1d0631025b36c31e447c3e9';
+/** Failed logins one identity may make per window; the next attempt is refused until it passes. */
+export const ADMIN_MAX_FAILURES = 5;
+export const ADMIN_WINDOW_MICROS = 10n * 60n * 1_000_000n;
+/** Longer keys are refused without hashing them. */
+const KEY_MAX = 256;
+
+export interface AdminAttempts { windowStart: bigint; failures: number }
+
+/** What the logic needs from the database; identities are hex strings here. */
+export interface AdminStore {
+  isAdmin(id: string): boolean;
+  grant(id: string): void;
+  revoke(id: string): void;
+  revokeAll(): void;
+  attempts(id: string): AdminAttempts | undefined;
+  setAttempts(id: string, attempts: AdminAttempts | undefined): void;
+}
+
+export class AdminError extends Error {}
+
+/** Does `key` hash to `hash`? Compared in constant time. */
+export function keyMatches(key: string, hash = ADMIN_KEY_SHA256): boolean {
+  if (key.length === 0 || key.length > KEY_MAX) return false;
+  return constantTimeEqual(sha256Hex(key), hash.toLowerCase());
+}
+
+/** Failures that still count at `now` (a window starts with its first failure and lasts 10 minutes). */
+export function failuresAt(attempts: AdminAttempts | undefined, now: bigint): number {
+  return attempts && now - attempts.windowStart < ADMIN_WINDOW_MICROS ? attempts.failures : 0;
+}
+
+/**
+ * Log in with the admin key. Right key: the caller becomes an admin and its failures are cleared.
+ * Wrong key: one more failure is recorded and `{ ok: false }` comes back (the caller's reducer must
+ * return normally, or the failure would roll back with it). Locked out: throws before checking.
+ */
+export function adminLogin(store: AdminStore, id: string, key: string, now: bigint, hash = ADMIN_KEY_SHA256): { ok: boolean; left: number } {
+  const prev = store.attempts(id);
+  const failures = failuresAt(prev, now);
+  if (failures >= ADMIN_MAX_FAILURES) throw new AdminError('Too many attempts; try again in 10 minutes');
+  if (keyMatches(key, hash)) {
+    store.grant(id);
+    store.setAttempts(id, undefined);
+    return { ok: true, left: ADMIN_MAX_FAILURES };
+  }
+  store.setAttempts(id, { windowStart: failures > 0 && prev ? prev.windowStart : now, failures: failures + 1 });
+  return { ok: false, left: ADMIN_MAX_FAILURES - failures - 1 };
+}
+
+export function adminLogout(store: AdminStore, id: string) { store.revoke(id); }
+
+/** Sign every browser out (key rotation, a lost device). Only an admin may. */
+export function adminRevokeAll(store: AdminStore, id: string) {
+  if (!store.isAdmin(id)) throw new AdminError('Admins only');
+  store.revokeAll();
+}
+
+/** A view's rows for admins; nothing for anyone else. */
+export function forAdmin<T>(store: Pick<AdminStore, 'isAdmin'>, id: string, rows: () => T[]): T[] {
+  return store.isAdmin(id) ? rows() : [];
+}
+
+// ---- What the views return ----------------------------------------------------------------
+
+export const DAY_MICROS = 86_400_000_000n;
+/** UTC day number (days since 1970-01-01). */
+export const dayOf = (micros: bigint) => Number(micros / DAY_MICROS);
+export const dateOf = (day: number) => new Date(day * 86_400_000).toISOString().slice(0, 10);
+/** A short anonymous id for a player (not the identity itself). */
+export const shortId = (identityHex: string) => sha256Hex(`player:${identityHex}`).slice(0, 10);
+
+export interface SeenLike { identity: string; firstSeen: bigint; lastSeen: bigint; sessions: number; tz: string; lang: string; name?: string }
+export interface ProfileLike { identity: string; name: string; kills: number; matchesPlayed: number }
+
+export interface PlayerRow { id: string; name: string; firstSeen: bigint; lastSeen: bigint; sessions: number; tz: string; lang: string; matches: number; kills: number }
+
+/** One row per player ever seen (callsign of the latest join, else the profile's), with career numbers from `profile`, newest activity first. */
+export function playerRows(seen: Iterable<SeenLike>, profiles: Iterable<ProfileLike>): PlayerRow[] {
+  const byId = new Map<string, ProfileLike>();
+  for (const p of profiles) byId.set(p.identity, p);
+  const rows: PlayerRow[] = [];
+  for (const s of seen) {
+    const p = byId.get(s.identity);
+    rows.push({ id: shortId(s.identity), name: s.name || p?.name || '', firstSeen: s.firstSeen, lastSeen: s.lastSeen, sessions: s.sessions, tz: s.tz, lang: s.lang, matches: p?.matchesPlayed ?? 0, kills: p?.kills ?? 0 });
+  }
+  return rows.sort((a, b) => (a.lastSeen < b.lastSeen ? 1 : a.lastSeen > b.lastSeen ? -1 : 0));
+}
+
+export interface DailyRow { day: number; date: string; newPlayers: number; activePlayers: number }
+
+/**
+ * New and active players per UTC day for the 30 days ending with the latest day anyone was seen
+ * (views cannot read the clock; the page fills in quiet days up to today). `activeOn(day)` counts
+ * the players active that day.
+ */
+export function dailyRows(seen: Iterable<SeenLike>, activeOn: (day: number) => number, days = 30): DailyRow[] {
+  const firstDays = new Map<number, number>();
+  let last = -1;
+  for (const s of seen) {
+    const d = dayOf(s.firstSeen);
+    firstDays.set(d, (firstDays.get(d) ?? 0) + 1);
+    last = Math.max(last, dayOf(s.lastSeen));
+  }
+  if (last < 0) return [];
+  const rows: DailyRow[] = [];
+  for (let day = last - days + 1; day <= last; day++) rows.push({ day, date: dateOf(day), newPlayers: firstDays.get(day) ?? 0, activePlayers: activeOn(day) });
+  return rows;
+}
+
+// ---- Play time (views of their own: changing the row type of an existing view would disconnect
+// every client on publish, so the views above keep their columns) ----------------------------
+
+/** A `player_time` row: seconds credited, and the start of the open stretch (0 = not in a room). */
+export interface TimeLike { identity: string; seconds: bigint; since: bigint }
+export interface RoundsLike { identity: string; roundsPlayed: number }
+
+/** Matches `PlayerRow.id`: rounds played (from `profile`) and online play time per player. */
+export interface PlayTimeRow { id: string; rounds: number; playSeconds: bigint; playingSince: bigint }
+
+/** One row per player ever seen (`ids` are identity hex), by the same short id as `playerRows`; zeros for players without stats or time. */
+export function playTimeRows(ids: Iterable<string>, profiles: Iterable<RoundsLike>, times: Iterable<TimeLike>): PlayTimeRow[] {
+  const rounds = new Map<string, number>();
+  for (const p of profiles) rounds.set(p.identity, p.roundsPlayed);
+  const timeOf = new Map<string, TimeLike>();
+  for (const t of times) timeOf.set(t.identity, t);
+  const rows: PlayTimeRow[] = [];
+  for (const id of ids) {
+    const t = timeOf.get(id);
+    rows.push({ id: shortId(id), rounds: rounds.get(id) ?? 0, playSeconds: t?.seconds ?? 0n, playingSince: t?.since ?? 0n });
+  }
+  return rows;
+}
+
+export interface DailyTimeRow { day: number; date: string; playSeconds: bigint }
+
+/**
+ * Online play time (credited seconds, all players) per UTC day for the `days` days ending with
+ * `lastDay` (the latest day anyone was seen or credited; -1 = none). `playOn(day)` sums a day.
+ */
+export function dailyTimeRows(lastDay: number, playOn: (day: number) => bigint, days = 30): DailyTimeRow[] {
+  if (lastDay < 0) return [];
+  const rows: DailyTimeRow[] = [];
+  for (let day = lastDay - days + 1; day <= lastDay; day++) rows.push({ day, date: dateOf(day), playSeconds: playOn(day) });
+  return rows;
+}
+
+// ---- Connection quality (shared/netstats.ts; views of their own, like play time) -------------
+
+/** A `player_net` row (identity hex, `lastAt` in epoch microseconds). */
+export interface NetLike { identity: string; avgP50: number; avgP95: number; worstP95: number; corrections: number; measuredSeconds: number; lastAt: bigint }
+
+/** Matches `PlayerRow.id`: typical ping (time-weighted mean of the reported p50 and p95), the worst p95, corrections per minute in a room. */
+export interface PlayerNetRow { id: string; pingP50: number; pingP95: number; worstP95: number; correctionsPerMin: number; measuredMinutes: number; lastAt: bigint }
+
+/** One row per player who has reported connection quality (players without one have no row). */
+export function playerNetRows(rows: Iterable<NetLike>): PlayerNetRow[] {
+  const out: PlayerNetRow[] = [];
+  for (const r of rows) {
+    out.push({
+      id: shortId(r.identity), pingP50: Math.round(r.avgP50), pingP95: Math.round(r.avgP95), worstP95: r.worstP95,
+      correctionsPerMin: perMinute(r.corrections, r.measuredSeconds), measuredMinutes: Math.round((r.measuredSeconds / 60) * 10) / 10, lastAt: r.lastAt,
+    });
+  }
+  return out;
+}
+
+export interface DailyNetRow { day: number; date: string; players: number; medianP50: number; medianP95: number; correctionsPerMin: number }
+
+/**
+ * Connection quality per UTC day for the `days` days ending with `lastDay` (-1 = none): the median
+ * over that day's players of each one's mean p50 and p95 (weighted by seconds), and corrections per
+ * minute over everyone's time in rooms. A day without reports has `players` 0.
+ */
+export function dailyNetRows(lastDay: number, rowsOn: (day: number) => Iterable<NetDay>, days = 30): DailyNetRow[] {
+  if (lastDay < 0) return [];
+  const rows: DailyNetRow[] = [];
+  for (let day = lastDay - days + 1; day <= lastDay; day++) {
+    const p50: number[] = [], p95: number[] = [];
+    let seconds = 0, corrections = 0;
+    for (const r of rowsOn(day)) {
+      if (r.seconds <= 0) continue;
+      p50.push(r.p50Sum / r.seconds); p95.push(r.p95Sum / r.seconds);
+      seconds += r.seconds; corrections += r.corrections;
+    }
+    rows.push({ day, date: dateOf(day), players: p50.length, medianP50: Math.round(median(p50) ?? 0), medianP95: Math.round(median(p95) ?? 0), correctionsPerMin: perMinute(corrections, seconds) });
+  }
+  return rows;
+}
+
+// ---- Device (shared/devicekind.ts; a view of its own, like play time and connection quality) --
+
+/** A `player_device` row (identity hex, `lastAt` in epoch microseconds). */
+export interface DeviceLike { identity: string; device: string; phone: number; tablet: number; desktop: number; lastAt: bigint }
+
+/** Matches `PlayerRow.id`: the kind of the latest report (phone, tablet, desktop), connections per kind, the latest report. */
+export interface PlayerDeviceRow { id: string; device: string; phone: number; tablet: number; desktop: number; lastAt: bigint }
+
+/** One row per player who has reported a device (players without one have no row). */
+export function playerDeviceRows(rows: Iterable<DeviceLike>): PlayerDeviceRow[] {
+  const out: PlayerDeviceRow[] = [];
+  for (const r of rows) out.push({ id: shortId(r.identity), device: r.device, phone: r.phone, tablet: r.tablet, desktop: r.desktop, lastAt: r.lastAt });
+  return out;
+}
+
+// ---- Active days (retention on the admin page; a view of its own, like play time) ---------------
+
+/** A `player_day` row: a player (identity hex) was active on a UTC day. */
+export interface DayLike { identity: string; day: number }
+
+/** Matches `PlayerRow.id`: one UTC day the player was active. */
+export interface PlayerDayRow { id: string; day: number }
+
+/** `shortId`, hashing each identity once (per-day rows repeat a player). */
+function shortIds() {
+  const ids = new Map<string, string>();
+  return (identity: string) => {
+    let id = ids.get(identity);
+    if (id === undefined) { id = shortId(identity); ids.set(identity, id); }
+    return id;
+  };
+}
+
+/** One row per player per active UTC day, by the same short id as `playerRows` (hashed once per player). */
+export function playerDayRows(rows: Iterable<DayLike>): PlayerDayRow[] {
+  const idOf = shortIds();
+  const out: PlayerDayRow[] = [];
+  for (const r of rows) out.push({ id: idOf(r.identity), day: r.day });
+  return out;
+}
+
+// ---- Per player per day (the admin page splits its daily charts by device; views of their own) --
+
+/** A `player_day_time` row: a player's online play time (seconds) on a UTC day. */
+export interface DayTimeLike { identity: string; day: number; seconds: number }
+/** Matches `PlayerRow.id`: a player's online play time on a UTC day. */
+export interface PlayerDayTimeRow { id: string; day: number; seconds: number }
+
+/** One row per player per UTC day with play time credited, by the same short id as `playerRows`. */
+export function playerDayTimeRows(rows: Iterable<DayTimeLike>): PlayerDayTimeRow[] {
+  const idOf = shortIds();
+  const out: PlayerDayTimeRow[] = [];
+  for (const r of rows) out.push({ id: idOf(r.identity), day: r.day, seconds: r.seconds });
+  return out;
+}
+
+/** A `player_day_net` row (identity hex): a player's connection reports on a UTC day. */
+export interface DayNetLike extends NetDay { identity: string; day: number }
+/** Matches `PlayerRow.id`: a player's mean p50 and p95 (weighted by seconds) on a UTC day, the seconds measured and corrections. */
+export interface PlayerDayNetRow { id: string; day: number; p50: number; p95: number; seconds: number; corrections: number }
+
+/** One row per player per UTC day with connection reports, by the same short id as `playerRows` (days without measured seconds left out). */
+export function playerDayNetRows(rows: Iterable<DayNetLike>): PlayerDayNetRow[] {
+  const idOf = shortIds();
+  const out: PlayerDayNetRow[] = [];
+  for (const r of rows) {
+    if (r.seconds <= 0) continue;
+    out.push({ id: idOf(r.identity), day: r.day, p50: Math.round(r.p50Sum / r.seconds), p95: Math.round(r.p95Sum / r.seconds), seconds: r.seconds, corrections: r.corrections });
+  }
+  return out;
+}
+
+/** A `player_hour` row (identity hex): activity, play time and connection reports in one hour. */
+export interface HourLike { identity: string; hour: number; seconds: number; netSeconds: number; p50Sum: number; p95Sum: number; corrections: number }
+/** Matches `PlayerRow.id`: a player's hour (hours since the epoch) with play time, mean p50 and p95 (0 without reports), seconds measured, corrections. */
+export interface PlayerHourRow { id: string; hour: number; seconds: number; p50: number; p95: number; netSeconds: number; corrections: number }
+
+/** One row per player per active hour, by the same short id as `playerRows`. */
+export function playerHourRows(rows: Iterable<HourLike>): PlayerHourRow[] {
+  const idOf = shortIds();
+  const out: PlayerHourRow[] = [];
+  for (const r of rows) {
+    const measured = r.netSeconds > 0;
+    out.push({
+      id: idOf(r.identity), hour: r.hour, seconds: r.seconds, p50: measured ? Math.round(r.p50Sum / r.netSeconds) : 0, p95: measured ? Math.round(r.p95Sum / r.netSeconds) : 0,
+      netSeconds: r.netSeconds, corrections: r.corrections,
+    });
+  }
+  return out;
+}
+
+// ---- Peak online (players in rooms at once; a table and a view of their own) ------------------
+
+/** Players in rooms at one moment: everyone, and by the side of their latest device report (phones and tablets are Phone). */
+export interface Online { all: number; phone: number; computer: number }
+/** A `peak_hour` row: the most players in rooms at once in one hour (hours since the epoch), and when the all-player peak was reached (epoch microseconds). */
+export interface PeakHour { hour: number; peak: number; phone: number; computer: number; at: bigint }
+
+/** Count players in rooms from each one's latest device kind (undefined: no report, counted only in `all`). */
+export function onlineBySide(devices: Iterable<string | undefined>): Online {
+  const online = { all: 0, phone: 0, computer: 0 };
+  for (const d of devices) {
+    online.all++;
+    if (d === 'phone' || d === 'tablet') online.phone++;
+    else if (d === 'desktop') online.computer++;
+  }
+  return online;
+}
+
+/**
+ * `hour`'s record after counting `online` at `now`: each figure keeps its own maximum, and `at` moves
+ * only when the all-player peak rises. Undefined when nothing changes (no write needed).
+ */
+export function bumpPeak(prev: PeakHour | undefined, hour: number, online: Online, now: bigint): PeakHour | undefined {
+  if (!prev) return online.all > 0 ? { hour, peak: online.all, phone: online.phone, computer: online.computer, at: now } : undefined;
+  if (online.all <= prev.peak && online.phone <= prev.phone && online.computer <= prev.computer) return undefined;
+  return {
+    hour, peak: Math.max(prev.peak, online.all), phone: Math.max(prev.phone, online.phone), computer: Math.max(prev.computer, online.computer),
+    at: online.all > prev.peak ? now : prev.at,
+  };
+}
+
+// ---- Growth metrics (shared/metrics.ts; tables and views of their own) ------------------------
+
+export interface PerfLike { identity: string; seconds: number; fpsSum: number; lowSum: number; lastFps: number; lastLow: number; waits: number; waitMsSum: number; boots: number; bootMsSum: number; lastAt: bigint }
+/** An `admin_player_perf` row: mean fps and 1% low over the seconds measured (else the latest), mean load times in ms. */
+export interface PlayerPerfRow { id: string; fps: number; low: number; seconds: number; waitMs: number; waits: number; bootMs: number; boots: number; lastAt: bigint }
+
+export function playerPerfRows(rows: Iterable<PerfLike>): PlayerPerfRow[] {
+  const out: PlayerPerfRow[] = [];
+  for (const r of rows) {
+    const round1 = (v: number) => Math.round(v * 10) / 10;
+    out.push({
+      id: shortId(r.identity), seconds: r.seconds,
+      fps: round1(r.seconds > 0 ? r.fpsSum / r.seconds : r.lastFps), low: round1(r.seconds > 0 ? r.lowSum / r.seconds : r.lastLow),
+      waitMs: r.waits ? Math.round(r.waitMsSum / r.waits) : 0, waits: r.waits, bootMs: r.boots ? Math.round(r.bootMsSum / r.boots) : 0, boots: r.boots, lastAt: r.lastAt,
+    });
+  }
+  return out;
+}
+
+export interface SourceLike { identity: string; source: string; medium: string; campaign: string; inApp: string; refBy: string; ref: string; shares: number; duels: number; played: boolean; firstAt: bigint }
+/** An `admin_player_source` row: no share codes, only whether a share brought this player and how many players theirs brought. */
+export interface PlayerSourceRow {
+  id: string; source: string; medium: string; campaign: string; inApp: string; referred: boolean;
+  shares: number; duels: number; invited: number; invitedPlayed: number; firstAt: bigint;
+}
+
+export function playerSourceRows(rows: Iterable<SourceLike>): PlayerSourceRow[] {
+  const all = [...rows];
+  const byRef = new Map<string, { invited: number; played: number }>();
+  for (const r of all) {
+    if (!r.refBy) continue;
+    const n = byRef.get(r.refBy) ?? { invited: 0, played: 0 };
+    n.invited++; if (r.played) n.played++;
+    byRef.set(r.refBy, n);
+  }
+  return all.map(r => {
+    const n = (r.ref && byRef.get(r.ref)) || { invited: 0, played: 0 };
+    return {
+      id: shortId(r.identity), source: r.source, medium: r.medium, campaign: r.campaign, inApp: r.inApp, referred: !!r.refBy,
+      shares: r.shares, duels: r.duels, invited: n.invited, invitedPlayed: n.played, firstAt: r.firstAt,
+    };
+  });
+}
+
+export interface MilestoneLike { identity: string; room: bigint; round: bigint; kill: bigint; match: bigint }
+export interface PlayerMilestoneRow { id: string; room: bigint; round: bigint; kill: bigint; match: bigint }
+
+export function playerMilestoneRows(rows: Iterable<MilestoneLike>): PlayerMilestoneRow[] {
+  const out: PlayerMilestoneRow[] = [];
+  for (const r of rows) out.push({ id: shortId(r.identity), room: r.room, round: r.round, kill: r.kill, match: r.match });
+  return out;
+}

@@ -1,0 +1,273 @@
+/* ---------- Touch controls (phones and tablets) ---------- */
+
+/* The controls live in the safe area (clear of notches and the home indicator). */
+.touch-layer, .tc-edit-stage {
+  position: fixed; z-index: 3;
+  left: var(--safe-l); right: var(--safe-r);
+  top: var(--safe-t); bottom: var(--safe-b);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  --op: 0.55; --tcs: 1;
+}
+.touch-layer.off { pointer-events: none; visibility: hidden; }
+.touch-layer.nostick .tc-stick { display: none; }
+body.menu-open .touch-layer { display: none; }
+
+.tc-btn {
+  position: absolute; width: calc(var(--d) * var(--tcs)); height: calc(var(--d) * var(--tcs));
+  transform: translate(-50%, -50%); border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  appearance: none; padding: 0;
+  background: rgba(8, 16, 22, 0.55); border: 1.5px solid rgba(190, 236, 244, 0.55); color: var(--ink);
+  opacity: var(--op); transition: opacity 0.12s, background 0.12s, transform 0.08s;
+  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 1px 2px #000;
+  -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+.tc-btn svg { width: 46%; height: 46%; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.tc-btn .tc-l { font-size: calc(10px * var(--tcs)); line-height: 1; max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-btn.text .tc-l { font-size: calc(12px * var(--tcs)); }
+.tc-btn:not(.text):not(.count) .tc-l { display: none; }
+.tc-btn:not(.text):not(.count) svg { width: 52%; height: 52%; }
+.tc-btn.active { opacity: 1; background: rgba(127, 246, 255, 0.28); border-color: var(--accent); color: #fff; transform: translate(-50%, -50%) scale(0.94); }
+.tc-btn.on { border-color: var(--accent); color: var(--accent); opacity: max(var(--op), 0.8); }
+.tc-btn.empty { opacity: calc(var(--op) * 0.5); }
+.tc-btn.hot { border-color: var(--cash); color: var(--cash); opacity: 1; animation: tcHot 1.2s ease-in-out infinite alternate; }
+.tc-btn[data-c="fire"], .tc-btn[data-c="custom2"] { background: rgba(255, 85, 68, 0.22); border-color: rgba(255, 140, 120, 0.7); }
+.tc-btn[data-c="fire"].active { background: rgba(255, 85, 68, 0.5); border-color: #ffb0a0; }
+.tc-btn[data-c="fire"].active, .tc-btn[data-c="custom2"].active { transform: translate(-50%, -50%); }
+.tc-btn[data-c="use"] { border-color: var(--amber); color: var(--amber); opacity: max(var(--op), 0.9); }
+.tc-gyro {
+  position: absolute; right: 8px; top: 50%; min-width: 42px; height: 30px; padding: 0 5px;
+  transform: translateY(-50%); border: 1px solid rgba(190, 236, 244, 0.55); border-radius: 6px;
+  background: rgba(8, 16, 22, 0.72); color: var(--ink); opacity: max(var(--op), 0.72);
+  font: inherit; font-size: 9px; font-weight: 700; line-height: 1;
+  letter-spacing: 0.04em; text-shadow: 0 1px 2px #000;
+  touch-action: none; -webkit-tap-highlight-color: transparent;
+}
+.tc-gyro.on { border-color: var(--accent); color: var(--accent); opacity: 1; }
+.tc-gyro[data-error="yes"] { border-color: var(--amber); color: var(--amber); }
+.tc-gyro[hidden] { display: none; }
+/* Weapon slots are rounded squares that show the gun. */
+.tc-btn[data-c="knife"], .tc-btn[data-c="secondary"], .tc-btn[data-c="primary"], .tc-btn[data-c="grenade"] {
+  border-radius: 10px; width: calc(var(--d) * var(--tcs) * 1.25);
+}
+.tc-btn[data-c="grenade"] svg { width: 38%; height: 38%; }
+@keyframes tcHot { from { box-shadow: 0 0 0 rgba(156, 240, 138, 0); } to { box-shadow: 0 0 14px rgba(156, 240, 138, 0.6); } }
+
+/* The floating stick: faint at rest, under the thumb while held; past the ring it sprints. */
+.tc-stick { position: absolute; width: calc(var(--d) * var(--tcs)); height: calc(var(--d) * var(--tcs)); transform: translate(-50%, -50%); pointer-events: none; opacity: calc(var(--op) * 0.6); }
+.tc-stick .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(190, 236, 244, 0.6); background: rgba(8, 16, 22, 0.25); }
+.tc-stick .ring::after { content: ''; position: absolute; inset: -22%; border-radius: 50%; border: 1.5px dashed rgba(190, 236, 244, 0.25); }
+.tc-stick .knob { position: absolute; left: calc(50% + var(--kx, 0px)); top: calc(50% + var(--ky, 0px)); width: 44%; height: 44%; border-radius: 50%; transform: translate(-50%, -50%); background: rgba(190, 236, 244, 0.55); box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); }
+.tc-stick.live { opacity: 0.95; }
+.tc-stick.sprint .ring::after { border-style: solid; border-color: var(--amber); }
+.tc-stick.sprint .knob { background: var(--amber); }
+.lefty .tc-stick .ring::after { inset: -22%; }
+
+/* Quick chat. */
+.tc-sheet { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(3, 7, 10, 0.45); touch-action: manipulation; }
+.tc-sheet-panel { width: min(520px, calc(100 * var(--vw) - 32px)); max-height: calc(100 * var(--vh) - 24px); overflow-y: auto; padding: 12px; background: var(--panel-solid); border: 1px solid var(--accent); text-transform: uppercase; letter-spacing: 0.06em; }
+.tc-sheet-panel header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tc-sheet-panel header b { flex: 1; color: var(--accent); letter-spacing: 0.16em; }
+.tc-sheet-panel .seg { display: flex; }
+.tc-sheet-panel .seg button, .tc-sheet-panel .x { min-height: 44px; min-width: 44px; padding: 0 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05); font-weight: 700; }
+.tc-sheet-panel .seg button.on { border-color: var(--accent); color: var(--accent); }
+.tc-sheet-panel .lines { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tc-sheet-panel .lines button, .tc-sheet-panel .type { min-height: 44px; padding: 6px 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-weight: 700; text-align: left; text-transform: none; letter-spacing: 0.02em; }
+.tc-sheet-panel .type { width: 100%; margin-top: 8px; border-color: var(--accent); color: var(--accent); text-align: center; }
+
+/* ---------- Layout editor ---------- */
+.tc-editor { position: fixed; inset: 0; z-index: 30; background: rgba(3, 7, 10, 0.95); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.tc-editor .tc-edit-stage { z-index: auto; background-image: linear-gradient(rgba(190, 236, 244, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(190, 236, 244, 0.06) 1px, transparent 1px); background-size: 5% 10%; outline: 1px dashed rgba(190, 236, 244, 0.25); }
+.tc-editor .tc-btn { opacity: max(var(--op), 0.75); cursor: grab; }
+.tc-editor .tc-btn.hid { opacity: 0.28; border-style: dashed; }
+.tc-editor .tc-btn.sel { opacity: 1; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(255, 180, 90, 0.35); color: var(--amber); }
+.tc-editor .tc-btn[data-c="stick"] { border-style: dashed; background: rgba(8, 16, 22, 0.25); }
+.tc-edit-bar {
+  position: fixed; z-index: 31; left: 50%; top: calc(var(--safe-t) + 6px); transform: translateX(-50%);
+  width: min(720px, calc(100 * var(--vw) - 16px - var(--safe-l) - var(--safe-r))); max-height: calc(46 * var(--vh)); overflow-y: auto;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px;
+  background: var(--panel-solid); border: 1px solid var(--accent); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.tc-edit-bar.low { top: auto; bottom: calc(var(--safe-b) + 6px); }
+.tc-edit-bar .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; width: 100%; }
+.tc-edit-bar .name { flex: 1; min-width: 120px; color: var(--amber); }
+.tc-edit-bar .hint { flex: 1; color: var(--muted); font-weight: 600; text-transform: none; letter-spacing: 0.02em; }
+.tc-edit-bar button, .tc-edit-bar select { min-height: 38px; padding: 0 10px; font-size: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.tc-edit-bar select { color: var(--ink); background: #0c161c; text-transform: none; }
+.tc-edit-bar button.on { border-color: var(--accent); color: var(--accent); }
+.tc-edit-bar button.done { border-color: var(--accent); background: rgba(127, 246, 255, 0.16); color: var(--accent); }
+.tc-edit-bar label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.tc-edit-bar input[type="range"] { width: 120px; accent-color: var(--accent); }
+.tc-edit-bar output { min-width: 3.2em; color: var(--ink); }
+
+/* Touch settings in Settings → Controls. */
+.ts-touch { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); }
+.ts-touch h3 { margin: 0; font-size: 13px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; }
+.ts-touch .ts-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ts-touch .ts-row > span { min-width: 9em; color: var(--muted); font-weight: 600; }
+.ts-touch .seg { display: flex; }
+.ts-touch .seg button { min-height: 40px; padding: 0 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); font-weight: 700; }
+.ts-touch .seg button + button { border-left: 0; }
+.ts-touch .seg button.on { border-color: var(--accent); color: var(--accent); background: rgba(127, 246, 255, 0.1); }
+.ts-touch .note { margin: 0; font-size: 12px; color: var(--muted); }
+.ts-touch input[type="range"] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.ts-touch .ts-row > p.note { flex: 1 1 100%; }
+.ts-touch .ts-default { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.ts-touch .ts-default[hidden] { display: none; }
+.ts-touch .edit { min-height: 44px; padding: 0 18px; border: 1px solid var(--accent); color: var(--accent); background: rgba(127, 246, 255, 0.1); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* ---------- Rotate to landscape (in a match or the layout editor) ---------- */
+#rotate { display: none; position: fixed; inset: 0; z-index: 40; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; background: #05090c; text-align: center; text-transform: uppercase; letter-spacing: 0.14em; }
+#rotate svg { width: 84px; height: 84px; stroke: var(--accent); stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; animation: tcTurn 2.4s ease-in-out infinite; }
+#rotate b { font-size: 22px; color: var(--ink); }
+#rotate small { color: var(--muted); font-weight: 600; letter-spacing: 0.08em; }
+@keyframes tcTurn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) {
+  body.touch:not(.menu-open) #rotate, body.touch.tc-editing #rotate { display: flex; }
+}
+/*
+ * Sideways play (src/ui/viewport.ts): an upright touch screen that cannot turn (in-app browsers,
+ * rotation lock) shows the match turned a quarter clockwise, and the player turns the phone. The body
+ * is sized to the landscape view in JS; fixed-position layers turn with it (a transform makes the body
+ * their containing block).
+ */
+body.touch.sideways { position: fixed; inset: auto; top: 0; left: 0; overflow: hidden; transform-origin: 0 0; transform: rotate(90deg) translateY(-100%); }
+body.sideways #rotate { display: none !important; }
+/* Turned a quarter clockwise: the page's top is the screen's right edge, its left the screen's top (the notch). */
+body.sideways { --safe-t: env(safe-area-inset-right, 0px); --safe-r: env(safe-area-inset-bottom, 0px); --safe-b: env(safe-area-inset-left, 0px); --safe-l: env(safe-area-inset-top, 0px); }
+#sideways-tip {
+  position: fixed; z-index: 41; left: 50%; top: 18%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px;
+  padding: 12px 18px; background: rgba(5, 9, 12, 0.88); border: 1px solid var(--accent); color: var(--ink);
+  font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; pointer-events: none; animation: sidewaysTip 4.5s ease forwards;
+}
+#sideways-tip svg { width: 34px; height: 34px; stroke: var(--accent); stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; animation: tcTurn 2.4s ease-in-out infinite; }
+@keyframes sidewaysTip { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- Install hint (lobby, phones and tablets) ---------- */
+.install-hint {
+  position: fixed; z-index: 15; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--safe-b) + 10px); width: min(560px, calc(100 * var(--vw) - 20px));
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 12px; padding: 10px 10px 10px 12px;
+  background: rgba(8, 16, 22, 0.96); border: 1px solid var(--accent); box-shadow: 0 6px 30px rgba(0, 0, 0, 0.5);
+}
+.install-hint .mark { width: 40px; height: 40px; border-radius: 9px; grid-row: span 2; }
+.install-hint b { font-size: 16px; letter-spacing: 0.06em; }
+.install-hint p { grid-column: 2; margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); line-height: 1.3; }
+.install-hint p.tip { grid-column: 1 / -1; padding-top: 6px; border-top: 1px solid var(--line); font-size: 12px; }
+.install-hint .share { display: inline-block; width: 15px; height: 15px; vertical-align: -2px; stroke: var(--accent); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.install-hint .acts { grid-column: 3; grid-row: 1 / span 2; display: flex; align-items: center; gap: 6px; }
+.install-hint a.inst-go { display: inline-flex; align-items: center; text-decoration: none; }
+.install-hint .inst-go { min-height: 44px; padding: 0 16px; border: 1px solid var(--accent); background: rgba(127, 246, 255, 0.16); color: var(--accent); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.install-hint .x { min-width: 44px; min-height: 44px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 16px; }
+/* An app's browser has more to say and an extra button: the buttons go under the text, not beside it. */
+.install-hint.in-app { grid-template-columns: auto 1fr; }
+.install-hint.in-app .mark { grid-row: span 3; }
+.install-hint.in-app .acts { grid-column: 2; grid-row: auto; justify-content: flex-end; }
+.install-hint.tip-only { grid-template-columns: 1fr auto; }
+.install-hint.tip-only p.tip { grid-column: 1; border: 0; padding: 0; }
+.install-hint.tip-only .acts { grid-column: 2; grid-row: 1; }
+
+/* ---------- The game on a touch screen ---------- */
+body.touch { -webkit-tap-highlight-color: transparent; }
+/* In a match: no scrolling, zooming, double-tap zoom, text selection or long-press callouts. */
+body.touch:not(.menu-open) { position: fixed; inset: 0; overscroll-behavior: none; touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+body.touch:not(.menu-open) canvas { touch-action: none; }
+body.touch .touch-layer > .tc-btn[data-c="menu"],
+body.touch .touch-layer > .tc-btn[data-c="scoreboard"],
+body.touch .touch-layer > .tc-btn[data-c="chat"],
+body.touch .touch-layer > .tc-btn[data-c="store"] { display: none; }
+
+/* The HUD around the touch controls: clear of notches, compact, and out from under the thumbs. */
+body.touch #hud { left: var(--safe-l); right: var(--safe-r); top: var(--safe-t); bottom: var(--safe-b); }
+/* …but the crosshair must stay on the camera's centre: one cutout side (Android) or the home bar (iPhone)
+   made the insets uneven and moved it off where shots go. */
+body.touch #hud .screen { inset: calc(-1 * var(--safe-t)) calc(-1 * var(--safe-r)) calc(-1 * var(--safe-b)) calc(-1 * var(--safe-l)); }
+body.touch #hud kbd, body.touch #hud .vkeys { display: none; }
+/* The score bar fits between the top buttons (Hud.fitScoreBar sets --sbs and drops the chips when tight). */
+body.touch .sb { transform: translateX(-50%) scale(var(--sbs, 0.78)); transform-origin: top center; top: 6px; }
+body.touch .sb.sb-tight .sb-avs { display: none; }
+body.touch .sb-sub { top: 50px; font-size: 10px; }
+body.touch .bomb { top: 66px; transform: translateX(-50%) scale(0.85); transform-origin: top center; }
+body.touch .toast { top: 104px; font-size: 14px; }
+body.touch .vitals { left: 22px; top: auto; bottom: 22px; width: 168px; padding: 5px 9px 6px; clip-path: none; }
+:where(.view-tall) body.touch .chat { top: 200px; }
+:where(.view-tall.view-wide) body.touch .chat { top: 340px; }
+body.touch .meter span { width: 24px; font-size: 9px; }
+body.touch .meter b { width: 30px; font-size: 15px; }
+body.touch .meter.stamina b { font-size: 11px; }
+body.touch .meter .track { height: 6px; }
+body.touch .meter + .meter { margin-top: 3px; }
+body.touch .vitals .cash { margin-top: 3px; font-size: 17px; }
+/* The weapon strip shows what you carry; the panel keeps the gun in hand, its magazine and the reload bar, above the strip. */
+body.touch .arms { left: 50%; right: auto; bottom: 62px; transform: translateX(-50%); min-width: 0; padding: 2px 10px 3px; text-align: center; background: none; border: 0; clip-path: none; text-shadow: 0 1px 3px #000; }
+body.touch .arms .wname { justify-content: center; }
+body.touch .arms .wname b { font-size: 13px; }
+body.touch .arms .ammo { font-size: 26px; }
+body.touch .arms .ammo small { font-size: 13px; }
+body.touch .arms.listed .ammo, body.touch .arms .slots { display: none; }
+body.touch .arms .reloadbar { width: 120px; margin: 2px auto 0; }
+body.touch .buyhint { bottom: auto; top: 84px; font-size: 12px; }
+body.touch .prompt { top: calc(50% + 52px); font-size: 14px; padding: 4px 12px; }
+body.touch .progress { top: calc(50% + 88px); width: 220px; padding: 3px 10px 5px; font-size: 13px; }
+body.touch .killfeed { top: 6px; right: 8px; font-size: 12px; gap: 2px; }
+body.touch .killfeed div { padding: 2px 7px; }
+body.touch .killfeed div:nth-child(n + 4) { display: none; }
+body.touch .killfeed .wpn { font-size: 11px; margin: 0 5px; }
+body.touch .chat { left: 6px; top: 140px; bottom: auto; width: min(320px, 38 * var(--vw)); font-size: 12px; }
+body.touch .chat-input { position: fixed; left: 50%; top: 10px; transform: translateX(-50%); width: min(520px, 90 * var(--vw)); z-index: 9; font-size: 16px; }
+body.touch .chat-input input { font-size: 16px; }
+body.touch .netstat { right: auto; left: 8px; bottom: 4px; font-size: 10px; }
+body.touch .fps { right: 10px; top: 2px; bottom: auto; font-size: 9px; opacity: 0.7; }
+body.touch .vehicle { bottom: auto; top: 84px; width: 260px; padding: 5px 10px 6px; }
+body.touch .vehicle .vrow > b { font-size: 14px; }
+body.touch .vehicle .vread b { font-size: 18px; }
+body.touch .spectate { bottom: 70px; }
+/* The scoreboard (toggled by its button) sits under the top row of buttons and over the other controls,
+   and scrolls under a finger: a 24-a-side list is taller than a sideways phone. */
+body.touch.hud-board #hud { z-index: 4; }
+body.touch #hud .scoreboard {
+  /* Just below the top buttons: their centre is 7.5% down and they are 40 px × the controls' scale (≈ 5.13vmin). */
+  --board-top: calc(7.5% + min(30px, 5.13vmin) + 6px);
+  top: var(--board-top); bottom: auto; transform: translateX(-50%); max-height: calc(100% - var(--board-top) - 8px); width: min(960px, 100% - 16px);
+  padding: 6px 10px 8px; gap: 4px 10px; overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; touch-action: pan-y;
+  scrollbar-width: thin; scrollbar-color: rgba(190, 236, 244, 0.25) transparent;
+}
+body.touch .scoreboard header { font-size: 10px; letter-spacing: 0.14em; }
+body.touch .scoreboard table { font-size: 12px; }
+body.touch .scoreboard td, body.touch .scoreboard th { padding: 0 4px; line-height: 1.35; }
+body.touch .scoreboard th { font-size: 9px; }
+body.touch .scoreboard .bot { font-size: 9px; margin-left: 4px; }
+body.touch .scoreboard .life { width: 6px; height: 6px; margin-right: 5px; }
+body.touch .scoreboard h3 { position: sticky; top: -6px; z-index: 1; margin-bottom: 2px; padding: 2px 8px; background: color-mix(in srgb, var(--team) 30%, rgb(8, 16, 22)); }
+body.touch .scoreboard h3 b { font-size: 18px; }
+body.touch .scoreboard h3 small { font-size: 10px; }
+body.touch #hud .end { top: 50%; max-height: calc(100% - 12px); padding: 10px 16px 12px; overscroll-behavior: contain; }
+body.touch .end h2 { font-size: 32px; }
+body.touch .end .final { font-size: 20px; margin-bottom: 6px; }
+body.touch .end table { font-size: 13px; }
+body.touch .end td, body.touch .end th { padding: 1px 6px; }
+body.touch .end p { margin: 8px 0 6px; font-size: 13px; }
+body.touch .end button { min-height: 44px; padding: 0 20px; }
+body.touch .released { display: none; }
+
+/* The store, by touch: bigger targets, no keyboard hints. */
+body.touch #store kbd, body.touch #store footer { display: none !important; }
+body.touch #store .tabs button { min-height: 44px; }
+body.touch #store .close { width: 44px; height: 44px; }
+body.touch #store .card, body.touch #store .opt, body.touch #store .lo, body.touch #store .slot-head { min-height: 44px; }
+body.touch #store .buy { min-height: 46px; }
+body.touch #store .picker .step, body.touch #store .picker > div button { min-height: 40px; min-width: 40px; }
+body.touch #store .card, body.touch #store .opt { grid-template-columns: minmax(0, 1fr) auto; }
+
+/* Menus by touch: no keyboard hints, finger-sized targets, and room to breathe on a sideways phone. */
+body.touch .lb-settings .hint { display: none; }
+body.touch .lb-settings .seg button, body.touch .lb-settings .tabs button, body.touch .lb-settings .leave { min-height: 44px; }
+body.touch .lb-settings .close { width: 44px; height: 44px; }
+body.touch .lb-settings input[type="range"] { min-height: 30px; }
+body.touch .ts-touch .seg button { min-height: 44px; }
+
+/* Left-handed: the HUD's side panels swap sides with the controls. */
+body.touch.tc-lefty .vitals, body.touch.tc-lefty .minimap, body.touch.tc-lefty .chat { left: auto; right: 6px; }
+body.touch.tc-lefty .killfeed { right: auto; left: 8px; align-items: flex-start; }
+body.touch.tc-lefty .fps { right: auto; left: 10px; }
+body.touch.tc-lefty .netstat { left: auto; right: 8px; }
