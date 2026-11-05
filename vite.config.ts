@@ -57,7 +57,7 @@ const gamePreload: Plugin = {
       const wanted = ['/src/main.ts', '/src/module_bindings/index.ts', '/three/examples/jsm/loaders/KTX2Loader.js'];
       const scripts = [...new Set(chunks.filter(c => c.moduleIds.some(id => wanted.some(w => id.endsWith(w)))).flatMap(c => [c.fileName, ...c.imports]))]
         .filter(f => !html.includes(f));
-      const base = crazygames ? './' : '/turfwar-game/'; // 👈 تم إصلاح المسار هنا
+      const base = crazygames ? './' : '/'; // 👈 تم إصلاح المسار هنا
       return html.replace('<!--preload:game-->', [...scripts.map(f => `<link rel="modulepreload" crossorigin href="${base}${f}" />`), ...files].join('\n    '));
     },
   },
@@ -69,7 +69,7 @@ let cdn: { origin: string; files: Set<string> } | undefined;
 let crazygames = false;
 
 const versioned = (file: string) => cdn?.files.has(file) ? `${cdn.origin}/${cdnKey(file, VERSIONS[file])}`
-  : `${crazygames ? '' : '/turfwar-game/'}${file}${VERSIONS[file] ? `?v=${VERSIONS[file]}` : ''}`; // 👈 تم إصلاح المسار هنا
+  : `${crazygames ? '' : '/'}${file}${VERSIONS[file] ? `?v=${VERSIONS[file]}` : ''}`; // 👈 تم إصلاح المسار هنا
 
 const versionedCssUrls: Plugin = {
   name: 'versioned-css-urls',
@@ -87,7 +87,7 @@ const pwa: Plugin = {
     const info = new RegExp(`^(en/)?(${INFO_PAGES.join('|')})/`);
     const built = Object.keys(bundle).filter(f => f !== 'sw.js' && !f.startsWith('admin') && !f.includes('/admin') && !info.test(f) && !f.endsWith('.map'));
     const pub = filesIn(publicDir).sort();
-    const shell = [...built.map(f => `/turfwar-game/${f}`), ...pub.filter(f => f === 'manifest.webmanifest' || (f.startsWith('icons/') && !f.includes('512')) || /^fonts\/rajdhani-\d+\.woff2$/.test(f)).map(versioned)].sort(); // 👈 تم إصلاح المسار هنا
+    const shell = [...built.map(f => `/${f}`), ...pub.filter(f => f === 'manifest.webmanifest' || (f.startsWith('icons/') && !f.includes('512')) || /^fonts\/rajdhani-\d+\.woff2$/.test(f)).map(versioned)].sort(); // 👈 تم إصلاح المسار هنا
     const data = { shell, shellVersion: `${appVersion()}-${hash(built.sort().join('|'))}`, assets: Object.keys(VERSIONS).map(versioned), assetOrigin: cdn?.origin ?? '' };
     const file = join(options.dir!, 'sw.js');
     const code = readFileSync(file, 'utf8');
@@ -147,7 +147,7 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
   cdn = command === 'build' && !crazygames ? await assetCdn() : undefined;
   const cdnLocal = cdn ? Object.keys(VERSIONS).filter(f => !cdn!.files.has(f)) : [];
   return {
-    base: '/turfwar-game/',
+    base: '/', // 👈 تم إصلاح المسار هنا
     plugins: [pageRoutes, versionedCssUrls, fontPreload, gamePreload, crazygamesPage, crazygamesPrune, pwa, sourcemaps(appVersion())],
     define: { __APP_VERSION__: JSON.stringify(appVersion()), __ASSET_VERSIONS__: JSON.stringify(VERSIONS), __ASSET_CDN__: JSON.stringify(cdn ? { origin: cdn.origin, local: cdnLocal } : null), __RELEASES__: JSON.stringify(releases()) },
     server: {
