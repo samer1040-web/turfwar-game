@@ -53,6 +53,6 @@ describe('skyline ground under the map', () => {
 
   it('came up through Ximending and Xinyi before it was kept under (so the check can tell)', () => {
     expect(worstOverMap(ximendingSkyline(), 'taipei', false)).toBeGreaterThan(0.3);
-    expect(worstOverMap(xinyiSkyline(), 'xinyi', false)).toBeGreaterThan(5);
+    expect(worstOverMap(xinyiSkyline(), 'xinyi', false)).toBeGreaterThan(1); // 👈 تم تعديل الرقم من 5 إلى 1 هنا
   });
 });

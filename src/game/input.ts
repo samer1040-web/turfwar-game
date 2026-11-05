@@ -80,7 +80,7 @@ export class Input {
   dispose() { this.abort.abort(); this.clear(); }
 
   /** Dev-only: ?debuginput lets automated browsers drive input without pointer lock. */
-  static readonly debug = import.meta.env.DEV && new URLSearchParams(location.search).has('debuginput');
+  static readonly debug = import.meta.env.DEV && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debuginput');
   /** Set while a script (the ?bench run) drives the player, so input counts without pointer lock. */
   driven = false;
   get locked() { return Input.debug || this.driven || (this.touch ? !this.touchPaused : document.pointerLockElement === this.canvas); }
