@@ -1150,7 +1150,6 @@ let benchBanner: HTMLElement | undefined;
 let theme: Promise<AudioBuffer> | undefined;
 let inMenu = true;
 let gestured = false;
-let matchStartTime = 0; // 👈 متغير جديد لمعرفة وقت بدء المباراة
 
 syncOptions();
 refresh();
@@ -1430,6 +1429,7 @@ async function start(action: Action, retried = false) {
     : action === 'room' ? { kind: 'room', room: joiningRoom }
     : action === 'start' ? { kind: 'start', size: perTeam(), mode, mapId: map, bots: false, isPublic }
     :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: true, isPublic: true };
+  
   let link: GameLink;
   try {
     link = via === 'online'
@@ -1621,6 +1621,7 @@ function reportRoom(link: GameLink, server: ServerId | undefined) {
 let matchServer: ServerId | undefined;
 let opponentLeftTimer: ReturnType<typeof setInterval> | undefined;
 let opponentLeftHandled = false;
+let matchStartTime = 0; // 👈 متغير جديد لمعرفة وقت بدء المباراة
 
 function playContext() {
   const app = inAppBrowserName(readEnv());
@@ -1913,9 +1914,8 @@ async function boot() {
           // نهاية المباراة إذا وصلت الجولات 6 أو خرج الخصم
           const isMatchOver = totalRounds >= 6 || state.phase === 'ended';
           
-          // 👇 التعديل هنا: إضافة وقت سماح 8 ثواني قبل اعتبار أن الخصم قد خرج 👇
-          const timeSinceStart = Date.now() - matchStartTime;
-          const opponentLeft = humanCount === 1 && timeSinceStart > 8000;
+          // 👇 التعديل هنا: إضافة وقت سماح 10 ثواني قبل اعتبار أن الخصم قد خرج 👇
+          const opponentLeft = humanCount === 1 && (Date.now() - matchStartTime > 10000);
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
