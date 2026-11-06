@@ -1421,7 +1421,7 @@ async function start(action: Action, retried = false) {
     : action === 'code' ? { kind: 'code', code: cleanCode(roomCode.value) }
     : action === 'room' ? { kind: 'room', room: joiningRoom }
     : action === 'start' ? { kind: 'start', size: perTeam(), mode, mapId: map, bots: false, isPublic }
-    :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: params.get('size') === '6', isPublic: true };
+    :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: true, isPublic: true };
   
   let link: GameLink;
   try {
@@ -1508,8 +1508,11 @@ async function start(action: Action, retried = false) {
 const waitStart = Date.now();
       const checkInterval = setInterval(async () => {
           const state = link.state();
-                    const is6v6 = params.get('size') === '6';
-          if (state && (state.soldiers.filter(s => !s.bot).length > 1 || (is6v6 && Date.now() - waitStart >= 12000))) {
+          // 👇 التعديل هنا: كسر الانتظار بعد 15 ثانية لـ 1v1 و 12 ثانية لـ 6v6 👇
+          const is1v1 = params.get('size') !== '6';
+          const waitTimeout = is1v1 ? 15000 : 12000;
+          
+          if (state && (state.soldiers.filter(s => !s.bot).length > 1 || (Date.now() - waitStart >= waitTimeout))) {
               clearInterval(checkInterval);
               waitOverlay.style.display = 'none';
               privateOverlay.style.display = 'none';
@@ -1935,8 +1938,7 @@ async function boot() {
                 color = "#cbd5e1";
             }
 
-                        // إرسال النتيجة للسيرفر (فقط في اللعب عبر الكود أو تليجرام)
-                        // إرسال النتيجة للسيرفر
+            // إرسال النتيجة للسيرفر
             const urlParams = new URLSearchParams(window.location.search);
             const roomCodeParam = urlParams.get('room');
             const userEmailParam = urlParams.get('email');
@@ -1946,16 +1948,14 @@ async function boot() {
             if (isWin && userEmailParam) {
                 
                 if (isTelegramPlatform) {
-                    // 👇 حالة تليجرام: إضافة 5 نقاط مباشرة (بدون كود غرفة) 👇
-                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_telegram_points', { 
+                    // 👇 حالة تليجرام: إضافة 5 نقاط عبر سيرفر الحماية (Cloudflare) 👇
+                    fetch('https://lootearn.top/api/add-points', { 
                         method: 'POST',
                         headers: {
-                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA', 
-                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ p_email: userEmailParam, p_amount: 5 })
-                    }).then(res => res.json()).then(data => console.log("تم إضافة 5 نقاط لتليجرام:", data)).catch(err => console.error(err));
+                        body: JSON.stringify({ email: userEmailParam, amount: 5 })
+                    }).then(res => res.json()).then(data => console.log("تم إضافة 5 نقاط عبر السيرفر الآمن:", data)).catch(err => console.error(err));
 
                 } else if (actualRoomCode) {
                     // 👇 حالة الموقع (الغرف): استخدام النظام القديم 👇
@@ -1970,6 +1970,7 @@ async function boot() {
                     }).then(res => res.json()).then(data => console.log("تم إضافة نقاط الغرفة:", data)).catch(err => console.error(err));
                 }
             }
+
             // إظهار شاشة النتيجة للمستخدم
             if (state.phase !== 'ended') {
                 const winOverlay = document.createElement('div');
