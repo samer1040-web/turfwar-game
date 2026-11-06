@@ -123,7 +123,6 @@ const line = (id: string, tail = `<span class="ping" id="${id}-ping"></span>`) =
 const serverChip = (id: string) => `<button type="button" class="server-chip" id="${id}"${choosable ? ' aria-haspopup="dialog"' : ' disabled'} hidden></button>`;
 const deploy = (id: string, label: Key, right = '', title?: Key) =>
   `<button type="button" class="deploy" id="${id}"${title ? ` title="${t(title)}" data-i18n-title="${title}"` : ''} disabled><span class="deploy-l">${PLAY}<span class="deploy-t" data-label="${label}">${t('lobby.loading')}</span></span><span class="deploy-r">${right}</span></button>`;
-
 menu.innerHTML = `
   <header class="top">
     <button type="button" class="mark" id="tab-quick" data-tab="quick" aria-label="${t('lobby.home')}" data-i18n-aria-label="lobby.home"><img src="${assetUrl('icons/icon-192.png')}" width="40" height="40" alt=""><span class="mark-back" aria-hidden="true">‹</span><span class="mark-name">${L('brand.short')}</span></button>
@@ -1150,6 +1149,8 @@ let benchBanner: HTMLElement | undefined;
 let theme: Promise<AudioBuffer> | undefined;
 let inMenu = true;
 let gestured = false;
+let matchStartTime = 0; // 👈 متغير لمعرفة وقت بدء المباراة
+let offlineTelegramMatch = false; // 👈 متغير جديد للبوت المحلي
 
 syncOptions();
 refresh();
@@ -1475,7 +1476,6 @@ async function start(action: Action, retried = false) {
           privateOverlay.style.display = 'flex';
           document.getElementById('p-name')!.textContent = callsign.value + ' (X)';
           
-          // إظهار الكود فوراً من الرابط (حل احتياطي)
           const urlRoomCode = new URLSearchParams(window.location.search).get('room');
           if (urlRoomCode) {
               const el1 = document.getElementById('p-top-code');
@@ -1515,7 +1515,7 @@ async function start(action: Action, retried = false) {
 const waitStart = Date.now();
       const checkInterval = setInterval(async () => {
           const state = link.state();
-          // 👇 التعديل هنا: كسر الانتظار بعد 15 ثانية لـ 1v1 و 12 ثانية لـ 6v6 👇
+          // 👇 كسر الانتظار بعد 15 ثانية لـ 1v1 و 12 ثانية لـ 6v6 👇
           const is1v1 = params.get('size') !== '6';
           const waitTimeout = is1v1 ? 15000 : 12000;
           
@@ -1524,6 +1524,30 @@ const waitStart = Date.now();
               waitOverlay.style.display = 'none';
               privateOverlay.style.display = 'none';
               
+              // 👇 جديد: بوت محلي إذا لم يأتِ خصم حقيقي في 1 ضد 1 👇
+              const humans = state ? state.soldiers.filter(s => !s.bot).length : 0;
+              if (action === 'quick' && is1v1 && humans <= 1) {
+                  link.dispose?.();
+                  const offline = new OfflineLink(map, name, teamChoice, { ...ELIMINATION, teamSize: 1, botSkill });
+                  offlineTelegramMatch = true;
+                  const linkMap = map;
+                  if (!assets) {
+                      status.textContent = loadingText();
+                      try { assets = await assetsLoad!; } catch (e) { starting = undefined; return; }
+                  }
+                  await assets.textures.load(groundSets(THEMES[loadMap(linkMap).def.theme]));
+                  starting = undefined; joiningRoom = -1;
+                  status.textContent = '';
+                  if (backdrop) { renderer.scene.remove(backdrop.group); backdrop = undefined; backdropMap = undefined; }
+                  launch(offline, linkMap);
+                  joined(offline, linkMap, playServer, false, true);
+                  matchServer = playServer;
+                  menu.hidden = true;
+                  document.body.classList.remove('menu-open');
+                  game?.capture();
+                  return;
+              }
+
               if (!assets) {
                   status.textContent = loadingText();
                   try { assets = await assetsLoad!; } catch (e) { link.dispose(); starting = undefined; return; }
@@ -1556,7 +1580,7 @@ const waitStart = Date.now();
       document.getElementById('wait-cancel')!.onclick = leaveWait;
       document.getElementById('p-cancel')!.onclick = leaveWait;
       
-      return; // إيقاف التنفيذ هنا! لا ندخل اللعبة حتى ينضم شخص.
+      return;
   }
 
   if (!assets) {
@@ -1591,6 +1615,7 @@ function launch(link: GameLink, map: string) {
 function backToLobby(reason: 'menu' | 'disconnect', message = '', exit?: Exit) {
   clearInterval(opponentLeftTimer);
   opponentLeftHandled = false;
+  offlineTelegramMatch = false; // 👈 إعادة تعيين المتغير
   if (!game) return;
   const finished = game.link.state()?.phase === 'ended';
   leftMatch(reason, exit);
@@ -1621,7 +1646,6 @@ function reportRoom(link: GameLink, server: ServerId | undefined) {
 let matchServer: ServerId | undefined;
 let opponentLeftTimer: ReturnType<typeof setInterval> | undefined;
 let opponentLeftHandled = false;
-let matchStartTime = 0; // 👈 متغير جديد لمعرفة وقت بدء المباراة
 
 function playContext() {
   const app = inAppBrowserName(readEnv());
@@ -1898,7 +1922,7 @@ async function boot() {
 
   const step = (dt: number, now: number, render = true) => {
     if (game) {
-      if (game.link.mode === 'online') {
+      if (game.link.mode === 'online' || offlineTelegramMatch) {
         const state = game.link.state();
         const myId = game.link.myId();
         const me = state?.soldiers.find(s => s.id === myId);
@@ -1914,8 +1938,8 @@ async function boot() {
           // نهاية المباراة إذا وصلت الجولات 6 أو خرج الخصم
           const isMatchOver = totalRounds >= 6 || state.phase === 'ended';
           
-          // 👇 التعديل هنا: إضافة وقت سماح 10 ثواني قبل اعتبار أن الخصم قد خرج 👇
-          const opponentLeft = humanCount === 1 && (Date.now() - matchStartTime > 10000);
+          // 👇 الخصم يعتبر خرجاً فقط في الأونلاين الحقيقي (وليس في البوت المحلي) 👇
+          const opponentLeft = game.link.mode === 'online' && humanCount === 1 && (Date.now() - matchStartTime > 10000);
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
@@ -1983,7 +2007,7 @@ async function boot() {
             }
 
             // إظهار شاشة النتيجة للمستخدم
-            if (state.phase !== 'ended') {
+            if (state.phase !== 'ended' || offlineTelegramMatch) {
                 const winOverlay = document.createElement('div');
                 winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
                 
