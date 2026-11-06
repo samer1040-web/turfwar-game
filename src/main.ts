@@ -1429,8 +1429,7 @@ async function start(action: Action, retried = false) {
     : action === 'code' ? { kind: 'code', code: cleanCode(roomCode.value) }
     : action === 'room' ? { kind: 'room', room: joiningRoom }
     : action === 'start' ? { kind: 'start', size: perTeam(), mode, mapId: map, bots: false, isPublic }
-    :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: true, isPublic: true, botSkill };
-  
+    :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: true, isPublic: true };
   let link: GameLink;
   try {
     link = via === 'online'
