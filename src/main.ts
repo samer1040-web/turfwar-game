@@ -1150,6 +1150,7 @@ let benchBanner: HTMLElement | undefined;
 let theme: Promise<AudioBuffer> | undefined;
 let inMenu = true;
 let gestured = false;
+let matchStartTime = 0; // 👈 متغير جديد لمعرفة وقت بدء المباراة
 
 syncOptions();
 refresh();
@@ -1366,6 +1367,13 @@ function offlineRules(): { mapId: string; mode: Mode } {
 }
 
 function fullscreenForTouch() {
+  // 👇 إجبار الشاشة على التوسع في تليجرام 👇
+  if ((window as any).Telegram?.WebApp) {
+      (window as any).Telegram.WebApp.expand();
+      if ((window as any).Telegram.WebApp.requestFullscreen) {
+          (window as any).Telegram.WebApp.requestFullscreen();
+      }
+  }
   if (CRAZYGAMES || !touchActive() || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
   void document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(() => {
     const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
@@ -1573,6 +1581,7 @@ const waitStart = Date.now();
   game?.capture();
 }
 function launch(link: GameLink, map: string) {
+  matchStartTime = Date.now(); // 👈 تسجيل وقت بدء المباراة
   game = new Game(assets, renderer, link, map, audio, app);
   if (link.mode === 'online') game.server = matchServer;
   if (!benchMode) game.onDuel(online.ok ? openDuelRoom : undefined);
@@ -1904,7 +1913,10 @@ async function boot() {
           
           // نهاية المباراة إذا وصلت الجولات 6 أو خرج الخصم
           const isMatchOver = totalRounds >= 6 || state.phase === 'ended';
-          const opponentLeft = humanCount === 1;
+          
+          // 👇 التعديل هنا: إضافة وقت سماح 8 ثواني قبل اعتبار أن الخصم قد خرج 👇
+          const timeSinceStart = Date.now() - matchStartTime;
+          const opponentLeft = humanCount === 1 && timeSinceStart > 8000;
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
@@ -1976,15 +1988,17 @@ async function boot() {
                 const winOverlay = document.createElement('div');
                 winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
                 
+                // 👇 تم تغيير نص الزر إلى "العودة للموقع" 👇
                 winOverlay.innerHTML = `
                   <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
                   <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
-                  <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">Back to Lobby</button>
+                  <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للموقع</button>
                 `;
                 document.body.appendChild(winOverlay);
                 document.getElementById('win-close')!.addEventListener('click', () => {
                   winOverlay.remove();
-                  backToLobby('menu');
+                  // 👇 توجيه اللاعب إلى الموقع الأساسي 👇
+                  window.location.href = 'https://lootearn.top';
                 });
                 return;
             }
