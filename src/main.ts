@@ -1421,7 +1421,7 @@ async function start(action: Action, retried = false) {
     : action === 'code' ? { kind: 'code', code: cleanCode(roomCode.value) }
     : action === 'room' ? { kind: 'room', room: joiningRoom }
     : action === 'start' ? { kind: 'start', size: perTeam(), mode, mapId: map, bots: false, isPublic }
-    :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: true, isPublic: true };
+    :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: true, isPublic: true, botSkill };
   
   let link: GameLink;
   try {
@@ -1512,7 +1512,7 @@ const waitStart = Date.now();
           const is1v1 = params.get('size') !== '6';
           const waitTimeout = is1v1 ? 15000 : 12000;
           
-          if (state && (state.soldiers.filter(s => !s.bot).length > 1 || (Date.now() - waitStart >= waitTimeout))) {
+          if ((state && state.soldiers.filter(s => !s.bot).length > 1) || (Date.now() - waitStart >= waitTimeout)) {
               clearInterval(checkInterval);
               waitOverlay.style.display = 'none';
               privateOverlay.style.display = 'none';
@@ -1521,7 +1521,7 @@ const waitStart = Date.now();
                   status.textContent = loadingText();
                   try { assets = await assetsLoad!; } catch (e) { link.dispose(); starting = undefined; return; }
               }
-              const linkMap = state.mapId;
+              const linkMap = state?.mapId ?? map;
               await assets.textures.load(groundSets(THEMES[loadMap(linkMap).def.theme]));
               starting = undefined; joiningRoom = -1;
               status.textContent = '';
