@@ -1914,8 +1914,8 @@ async function boot() {
           // نهاية المباراة إذا وصلت الجولات 6 أو خرج الخصم
           const isMatchOver = totalRounds >= 6 || state.phase === 'ended';
           
-          // 👇 التعديل هنا: إضافة وقت سماح 10 ثواني قبل اعتبار أن الخصم قد خرج 👇
-          const opponentLeft = humanCount === 1 && (Date.now() - matchStartTime > 10000);
+          // 👇 التعديل هنا: فحص إجمالي الجنود (بما فيهم البوت) بدلاً من البشر فقط 👇
+          const opponentLeft = state.soldiers.length === 1 && (Date.now() - matchStartTime > 10000);
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
