@@ -1904,8 +1904,6 @@ async function boot() {
         const me = state?.soldiers.find(s => s.id === myId);
         
         if (state && me && !opponentLeftHandled && state.config.teamSize === 1) {
-          const humanCount = state.soldiers.filter(s => !s.bot).length;
-          
           // حساب الجولات (النقاط)
           const myScore = state.scores[me.team] || 0;
           const oppScore = state.scores[1 - me.team] || 0;
@@ -1913,11 +1911,8 @@ async function boot() {
           
           // نهاية المباراة إذا وصلت الجولات 6 أو خرج الخصم
           const isMatchOver = totalRounds >= 6 || state.phase === 'ended';
-          
-          // 👇 التعديل هنا: فحص إجمالي الجنود (بما فيهم البوت) بدلاً من البشر فقط 👇
-          const opponentLeft = state.soldiers.length === 1 && (Date.now() - matchStartTime > 10000);
 
-          if (isMatchOver || opponentLeft) {
+          if (isMatchOver) {
             opponentLeftHandled = true;
             freeMouse();
 
@@ -1927,12 +1922,7 @@ async function boot() {
             let msg = "";
             let color = "";
 
-            if (opponentLeft && !isMatchOver) {
-                isWin = true;
-                title = "Congratulations, you won! 🏆";
-                msg = "Your opponent left the game.";
-                color = "#f59e0b";
-            } else if (myScore > oppScore) {
+            if (myScore > oppScore) {
                 isWin = true;
                 title = "Congratulations, you won! 🏆";
                 msg = `Score: ${myScore} - ${oppScore}`;
