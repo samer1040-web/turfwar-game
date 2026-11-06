@@ -1903,7 +1903,7 @@ async function boot() {
         const myId = game.link.myId();
         const me = state?.soldiers.find(s => s.id === myId);
         
-        if (state && me && !opponentLeftHandled && state.config.teamSize === 1) {
+        if (state && me && !opponentLeftHandled) {
           // حساب الجولات (النقاط)
           const myScore = state.scores[me.team] || 0;
           const oppScore = state.scores[1 - me.team] || 0;
