@@ -1935,16 +1935,30 @@ async function boot() {
                 color = "#cbd5e1";
             }
 
-            // إرسال النتيجة للسيرفر (فقط في اللعب عبر الكود)
+                        // إرسال النتيجة للسيرفر (فقط في اللعب عبر الكود أو تليجرام)
+                        // إرسال النتيجة للسيرفر
             const urlParams = new URLSearchParams(window.location.search);
             const roomCodeParam = urlParams.get('room');
             const userEmailParam = urlParams.get('email');
-            
-            // استخدام الكود الحقيقي للعبة (CWXG) بدلاً من الكود القديم
+            const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
-            if (actualRoomCode && userEmailParam) {
-                if (isWin) {
+            if (isWin && userEmailParam) {
+                
+                if (isTelegramPlatform) {
+                    // 👇 حالة تليجرام: إضافة 5 نقاط مباشرة (بدون كود غرفة) 👇
+                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_telegram_points', { 
+                        method: 'POST',
+                        headers: {
+                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA', 
+                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ p_email: userEmailParam, p_amount: 5 })
+                    }).then(res => res.json()).then(data => console.log("تم إضافة 5 نقاط لتليجرام:", data)).catch(err => console.error(err));
+
+                } else if (actualRoomCode) {
+                    // 👇 حالة الموقع (الغرف): استخدام النظام القديم 👇
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
                         method: 'POST',
                         headers: {
@@ -1953,20 +1967,9 @@ async function boot() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: userEmailParam })
-                    }).then(res => res.json()).then(data => console.log("تم إضافة النقاط:", data)).catch(err => console.error(err));
-                } else if (isDraw) {
-                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/cancel_3d_match', { 
-                        method: 'POST',
-                        headers: {
-                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA', 
-                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ p_room_code: actualRoomCode })
-                    }).then(res => res.json()).then(data => console.log("تم إرجاع النقاط:", data)).catch(err => console.error(err));
+                    }).then(res => res.json()).then(data => console.log("تم إضافة نقاط الغرفة:", data)).catch(err => console.error(err));
                 }
             }
-
             // إظهار شاشة النتيجة للمستخدم
             if (state.phase !== 'ended') {
                 const winOverlay = document.createElement('div');
