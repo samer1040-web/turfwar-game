@@ -17,16 +17,37 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.10
+          
       - name: Install
         run: |
           bun install --frozen-lockfile
           bun install --cwd spacetimedb --frozen-lockfile
+          
       - name: Test
         run: echo "Tests skipped to allow deployment"
+        
       - name: Build
         run: bun run build
+        
       - name: Type-check the server module
         run: bun run typecheck:module
+
+      # 👇 الخطوة الجديدة: نسخ الملفات إلى مجلد docs 👇
+      - name: Copy build to docs
+        run: |
+          rm -rf docs
+          cp -r dist docs
+          touch docs/.nojekyll
+
+      # 👇 رفع الملفات إلى المستودع 👇
+      - name: Commit and Push docs
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add docs
+          git commit -m "Auto-deploy to docs folder" || exit 0
+          git push
