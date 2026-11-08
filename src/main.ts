@@ -1899,7 +1899,8 @@ async function boot() {
   let previous = performance.now();
   let angle = 0.6;
   const fixed = import.meta.env.DEV && (params.has('fixeddt') || params.has('capture'));
-    const step = (dt: number, now: number, render = true) => {
+
+  const step = (dt: number, now: number, render = true) => {
     if (game) {
       if (game.link.mode === 'online') {
         const state = game.link.state();
@@ -1966,7 +1967,7 @@ async function boot() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email: userEmailParam, amount: 3 })
-                    }).then(res => res.json()).then(data => console.log("✅ تم إضافة 3 نقاط:", data)).catch(err => console.error("❌ خطأ في النقاط:", err));
+                    }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
                 } else if (actualRoomCode) {
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
                         method: 'POST',
@@ -1976,7 +1977,7 @@ async function boot() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: userEmailParam })
-                    }).then(res => res.json()).then(data => console.log("تم إضافة نقاط الغرفة:", data)).catch(err => console.error(err));
+                    }).then(res => res.json()).then(data => console.log("Room points added:", data)).catch(err => console.error(err));
                 }
             }
 
@@ -1989,7 +1990,6 @@ async function boot() {
               <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للبوت</button>
             `;
             
-            // 👇 هذا السطر كان ناقصاً وهو سبب عدم ظهور الشاشة 👇
             document.body.appendChild(winOverlay);
             
             document.getElementById('win-close')!.addEventListener('click', () => {
@@ -2041,7 +2041,8 @@ async function boot() {
   let simNow = 0;
   const stepFrames = (n: number, render = true) => { for (let i = 0; i < n; i++) { simNow += 1000 / 30; step(1 / 30, simNow, render && i === n - 1); } return n; };
   const startNow = () => { const action = startAction(); return modeOf(action) === 'online' ? run(action) : start(action); };
-    const autostart = params.get('autostart');
+  
+  const autostart = params.get('autostart');
   const roomParam = params.get('room');
   if (autostart === 'quick') {
     menu.style.display = 'none';
