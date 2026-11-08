@@ -164,7 +164,7 @@ export interface MatchConfig {
 }
 
 /** Competitive matches play six rounds; practice has no round cap. */
-const COMPETITIVE = { roundsToWin: 6, maxRounds: 6, bombTime: 40, armTime: 5, disarmTime: 5, freezeTime: 4, roundOverTime: 5, matchOverTime: 10, buyTime: 20 };
+const COMPETITIVE = { roundsToWin: 6, maxRounds: undefined, bombTime: 40, armTime: 5, disarmTime: 5, freezeTime: 4, roundOverTime: 5, matchOverTime: 10, buyTime: 20 };
 export const ELIMINATION: MatchConfig = { ...COMPETITIVE, mode: 'elimination', teamSize: 6, roundTime: 120, roundTimeSingle: 120, warmup: 3, botSkill: 0.45 };
 export const SABOTAGE: MatchConfig = { ...COMPETITIVE, mode: 'sabotage', teamSize: 6, roundTime: 90, roundTimeSingle: 120, warmup: 3, botSkill: 0.45 };
 export const OFFLINE_CONFIG = ELIMINATION;
