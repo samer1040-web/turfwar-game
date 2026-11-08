@@ -1963,10 +1963,14 @@ async function boot() {
 
             if (isWin && userEmailParam) {
                 if (isTelegramPlatform) {
-                    fetch('https://lootearn.top/api/add-points', { 
+                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email: userEmailParam, amount: 3 })
+                        headers: {
+                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
                     }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
                 } else if (actualRoomCode) {
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
@@ -1994,11 +1998,7 @@ async function boot() {
             
             document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              if ((window as any).Telegram?.WebApp) {
-                  (window as any).Telegram.WebApp.close();
-              } else {
-                  window.location.href = 'https://lootearn.top';
-              }
+              window.location.href = 'https://t.me/LootEarnGames_bot';
             });
             
             return;
@@ -2078,7 +2078,6 @@ async function boot() {
     }
     const reqSize = params.get('size') === '6' ? 6 : 1;
     
-    // 👇 التعديل: جعل الخريطة ثابتة مثل العب عبر النت (citadel) 👇
     special = { kind: 'invite', mapId: 'citadel', mode: 'elimination', size: reqSize };
     run('start'); 
   } 

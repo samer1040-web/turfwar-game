@@ -1,11 +1,9 @@
 import type { Input } from '../game/input';
-import { GyroAim } from '../game/gyro';
 import type { ActionId } from '../game/keybinds';
 import { type HoldAim } from '../game/holdfire';
 import {
   CONTROLS, controlAction, placeOf, stickActions, stickShown, STICK, TOUCH_LOOK_SCALE, touchSensitivity, type ControlId, type ControlKind, type PlaceId, type TouchContext, type TouchLayout, visibleControls, touchLayout,
 } from '../game/touchlayout';
-import { onLang, t } from './i18n';
 import { toView, viewRect } from './viewport';
 
 export interface TouchInfo {
@@ -15,30 +13,11 @@ export interface TouchInfo {
   smokes: number;
   molotovs: number;
   bobas: number;
-  use?: 'vehicle' | 'crate' | 'weapon' | 'arm' | 'disarm';
+  use?: 'vehicle' | 'crate' | 'arm' | 'disarm';
   storeHot: boolean;
   reloading: boolean;
   holdAim: HoldAim;
   shots: number;
-}
-
-export interface TouchLookPoint {
-  x: number;
-  y: number;
-}
-
-export function holdTouchAction(input: Pick<Input, 'touchHeld' | 'touchPress'>, action: ActionId) {
-  input.touchHeld.set(action, 1);
-  if (action === 'use') input.touchPress(action);
-}
-
-export function moveTouchLook(pointers: Map<number, TouchLookPoint>, pointer: number, x: number, y: number) {
-  const active = pointers.get(pointer);
-  if (!active) return undefined;
-  const delta = { x: x - active.x, y: y - active.y };
-  active.x = x;
-  active.y = y;
-  return delta;
 }
 
 const humanName = (id: ControlId | 'stick') => {
@@ -123,64 +102,36 @@ export function controlHtml(id: PlaceId, layout: TouchLayout, extra = ''): strin
 export class TouchControls {
   readonly root = document.createElement('div');
   readonly stick = document.createElement('div');
-  private readonly gyroButton = document.createElement('button');
-  private readonly gyro: GyroAim;
   private readonly buttons = new Map<PlaceId, HTMLElement>();
   private readonly stop = new AbortController();
   private readonly activeButtons = new Map<number, { id: ControlId; action: ActionId; kind: ControlKind }>();
   private readonly stickActions = new Set<ActionId>();
   private activeStick?: { pointer: number; x: number; y: number; radius: number };
-  private readonly activeLooks = new Map<number, TouchLookPoint>();
+  private activeLook?: { pointer: number; x: number; y: number };
   private context: TouchContext = { scope: 'none' };
-  private readonly stopLang: () => void;
 
   constructor(container: HTMLElement, private readonly input: Input, private readonly ui: { typeChat: (team: boolean) => void; say: (text: string, team: boolean) => void }) {
     this.root.className = 'touch-layer';
     this.root.setAttribute('aria-label', 'Touch controls');
-    this.gyro = new GyroAim(input, state => {
-      this.gyroButton.dataset.error = state === 'denied' ? 'yes' : '';
-      this.updateGyroButton();
-    });
     this.stick.className = 'tc-stick';
     this.stick.innerHTML = '<span class="ring"></span><span class="knob"></span>';
-    this.gyroButton.type = 'button';
-    this.gyroButton.className = 'tc-gyro';
-    this.gyroButton.textContent = this.gyroButton.dataset.error === 'yes' ? '!' : t('tc.gyroShort');
-    this.gyroButton.hidden = !this.gyro.available;
-    this.gyroButton.addEventListener('pointerdown', e => e.stopPropagation(), { signal: this.stop.signal });
-    this.gyroButton.addEventListener('click', () => void this.gyro.toggle(), { signal: this.stop.signal });
-    this.root.append(this.stick, this.gyroButton);
+    this.root.append(this.stick);
     container.appendChild(this.root);
     this.root.addEventListener('pointerdown', e => this.pointerDown(e), { signal: this.stop.signal });
     this.root.addEventListener('pointermove', e => this.pointerMove(e), { signal: this.stop.signal });
     this.root.addEventListener('pointerup', e => this.pointerUp(e), { signal: this.stop.signal });
     this.root.addEventListener('pointercancel', e => this.pointerUp(e), { signal: this.stop.signal });
     this.root.addEventListener('contextmenu', e => e.preventDefault(), { signal: this.stop.signal });
-    this.stopLang = onLang(() => this.updateGyroButton());
-    this.updateGyroButton();
     this.update({ scope: 'none' }, { slot: 0, weapons: ['', ''], grenades: 0, smokes: 0, molotovs: 0, bobas: 0, storeHot: false, reloading: false, holdAim: 'none', shots: 0 });
   }
 
   dispose() {
-    this.gyro.dispose();
-    this.stopLang();
     this.stop.abort();
     this.root.remove();
   }
 
-  private updateGyroButton() {
-    const title = this.gyroButton.dataset.error === 'yes'
-      ? t('tc.gyroDenied')
-      : t(this.gyro.starting ? 'tc.gyro.wait' : this.gyro.enabled ? 'tc.gyro.on' : 'tc.gyro.off');
-    this.gyroButton.textContent = this.gyroButton.dataset.error === 'yes' ? '!' : this.gyro.starting ? '…' : t('tc.gyroShort');
-    this.gyroButton.classList.toggle('on', this.gyro.enabled);
-    this.gyroButton.setAttribute('aria-pressed', String(this.gyro.enabled));
-    this.gyroButton.setAttribute('aria-label', title);
-    this.gyroButton.title = title;
-  }
-
   private idFor(target: EventTarget | null): PlaceId | undefined {
-    const el = target instanceof Element ? target.closest<HTMLElement>('[data-c]') : null;
+    const el = target instanceof HTMLElement ? target.closest<HTMLElement>('[data-c]') : null;
     return el?.dataset.c as PlaceId | undefined;
   }
 
@@ -209,24 +160,26 @@ export class TouchControls {
     e.preventDefault();
   }
 
-  private beginLook(e: PointerEvent, fromFire = false) {
-    if (this.activeLooks.has(e.pointerId) || !this.input.touch) return;
+  private beginLook(e: PointerEvent) {
+    if (this.activeLook || !this.input.touch) return;
     const p = this.point(e);
-    if (p.x <= p.width * 0.5 && !fromFire) return;
-    this.activeLooks.set(e.pointerId, { x: p.x, y: p.y });
+    if (p.x <= p.width * 0.5) return;
+    this.activeLook = { pointer: e.pointerId, x: p.x, y: p.y };
     this.root.setPointerCapture(e.pointerId);
     e.preventDefault();
   }
 
   private moveLook(e: PointerEvent) {
-    if (!this.activeLooks.has(e.pointerId)) return;
-    const p = this.point(e);
-    const delta = moveTouchLook(this.activeLooks, e.pointerId, p.x, p.y);
-    if (delta) this.input.touchLook(delta.x, delta.y, TOUCH_LOOK_SCALE * touchSensitivity());
+    const active = this.activeLook;
+    if (!active || active.pointer !== e.pointerId) return;
+    const p = this.point(e), dx = p.x - active.x, dy = p.y - active.y;
+    active.x = p.x;
+    active.y = p.y;
+    this.input.touchLook(dx, dy, TOUCH_LOOK_SCALE * touchSensitivity());
   }
 
   private endLook(pointer: number) {
-    this.activeLooks.delete(pointer);
+    if (this.activeLook?.pointer === pointer) this.activeLook = undefined;
   }
 
   private moveStick(e: PointerEvent) {
@@ -272,7 +225,7 @@ export class TouchControls {
       return;
     }
     const { action, kind } = controlAction(id, touchLayout());
-    if (kind === 'hold') holdTouchAction(this.input, action);
+    if (kind === 'hold') this.input.touchHeld.set(action, 1);
     else if (kind === 'toggle') {
       if (this.input.touchHeld.has(action)) this.unbind(action);
       else this.input.touchHeld.set(action, 1);
@@ -281,7 +234,6 @@ export class TouchControls {
     this.root.setPointerCapture(e.pointerId);
     const el = this.buttons.get(id);
     if (el) el.classList.add('active');
-    if (action === 'fire') this.beginLook(e, true);
     e.preventDefault();
   }
 
