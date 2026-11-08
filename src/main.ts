@@ -2003,13 +2003,17 @@ async function boot() {
               <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
               <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
               <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للموقع</button>
-            `;
-            document.body.appendChild(winOverlay);
-            document.getElementById('win-close')!.addEventListener('click', () => {
+            `;            document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              // 👇 توجيه اللاعب إلى الموقع الأساسي 👇
-              window.location.href = 'https://lootearn.top';
+              
+              // 👇 التعديل: إغلاق النافذة والعودة إلى بوت التليجرام تلقائياً 👇
+              if ((window as any).Telegram?.WebApp) {
+                  (window as any).Telegram.WebApp.close();
+              } else {
+                  window.location.href = 'https://lootearn.top';
+              }
             });
+            
             return;
           }
         }
