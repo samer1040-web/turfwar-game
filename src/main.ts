@@ -1516,8 +1516,12 @@ const waitStart = Date.now();
       const checkInterval = setInterval(async () => {
           const state = link.state();
           // 👇 التعديل هنا: كسر الانتظار بعد 15 ثانية لـ 1v1 و 12 ثانية لـ 6v6 👇
+                    // 👇 التعديل: 20 ثانية لإنشاء الغرفة (الكود)، والبقاء على الوضع القديم للعب السريع 👇
           const is1v1 = params.get('size') !== '6';
-          const waitTimeout = is1v1 ? 15000 : 12000;
+          const isCreate = params.get('autostart') === 'create';
+          const waitTimeout = isCreate ? 20000 : (is1v1 ? 15000 : 12000);
+          
+          
           
           if ((state && state.soldiers.filter(s => !s.bot).length > 1) || (Date.now() - waitStart >= waitTimeout)) {
               clearInterval(checkInterval);
@@ -1905,12 +1909,13 @@ async function boot() {
         
         if (state && me && !opponentLeftHandled) {
           // حساب الجولات (النقاط)
+                    // حساب الجولات (النقاط)
           const myScore = state.scores[me.team] || 0;
           const oppScore = state.scores[1 - me.team] || 0;
           const totalRounds = myScore + oppScore;
           
-          // نهاية المباراة إذا وصلت الجولات 6 أو خرج الخصم
-          const isMatchOver = totalRounds >= 6 || state.phase === 'ended';
+          // 👇 التعديل: نهاية المباراة إذا وصل أحد الطرفين إلى 6 قتلات 👇
+          const isMatchOver = myScore >= 6 || oppScore >= 6 || state.phase === 'ended';
           
           // فحص انسحاب الخصم (إذا كنت وحدك في الغرفة ولا يوجد بوت، ومرت 10 ثواني)
           const timeSinceStart = Date.now() - matchStartTime;
@@ -1926,11 +1931,19 @@ async function boot() {
             let msg = "";
             let color = "";
 
+                        // 👇 التعديل: إذا انسحب الخصم، نعطي الفوز فقط إذا كان مجموع القتلات 3 أو أكثر (أي في الجولة الرابعة) 👇
             if (opponentLeft && !isMatchOver) {
-                isWin = true;
-                title = "Congratulations, you won! 🏆";
-                msg = "Your opponent left the game.";
-                color = "#f59e0b";
+                if (totalRounds >= 3) {
+                    isWin = true;
+                    title = "Congratulations, you won! 🏆";
+                    msg = "Your opponent left the game.";
+                    color = "#f59e0b";
+                } else {
+                    isDraw = true;
+                    title = "Match Abandoned 🏳️";
+                    msg = "Opponent left too early. No points awarded.";
+                    color = "#cbd5e1";
+                }
             } else if (myScore > oppScore) {
                 isWin = true;
                 title = "Congratulations, you won! 🏆";
@@ -1957,15 +1970,15 @@ async function boot() {
 
             if (isWin && userEmailParam) {
                 
-                if (isTelegramPlatform) {
-                    // 👇 حالة تليجرام: إضافة 5 نقاط عبر سيرفر الحماية (Cloudflare) 👇
+                                if (isTelegramPlatform) {
+                    // 👇 حالة تليجرام: إضافة 3 نقاط عبر سيرفر الحماية 👇
                     fetch('https://lootearn.top/api/add-points', { 
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ email: userEmailParam, amount: 5 })
-                    }).then(res => res.json()).then(data => console.log("تم إضافة 5 نقاط عبر السيرفر الآمن:", data)).catch(err => console.error(err));
+                        body: JSON.stringify({ email: userEmailParam, amount: 3 })
+                    }).then(res => res.json()).then(data => console.log("تم إضافة 3 نقاط عبر السيرفر الآمن:", data)).catch(err => console.error(err));
 
                 } else if (actualRoomCode) {
                     // 👇 حالة الموقع (الغرف): استخدام النظام القديم 👇
