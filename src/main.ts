@@ -1899,8 +1899,7 @@ async function boot() {
   let previous = performance.now();
   let angle = 0.6;
   const fixed = import.meta.env.DEV && (params.has('fixeddt') || params.has('capture'));
-
-  const step = (dt: number, now: number, render = true) => {
+    const step = (dt: number, now: number, render = true) => {
     if (game) {
       if (game.link.mode === 'online') {
         const state = game.link.state();
@@ -1908,16 +1907,11 @@ async function boot() {
         const me = state?.soldiers.find(s => s.id === myId);
         
         if (state && me && !opponentLeftHandled) {
-          // حساب الجولات (النقاط)
-                    // حساب الجولات (النقاط)
           const myScore = state.scores[me.team] || 0;
           const oppScore = state.scores[1 - me.team] || 0;
           const totalRounds = myScore + oppScore;
           
-          // 👇 التعديل: نهاية المباراة إذا وصل أحد الطرفين إلى 6 قتلات 👇
-          const isMatchOver = myScore >= 6 || oppScore >= 6 || state.phase === 'ended';
-          
-          // فحص انسحاب الخصم (إذا كنت وحدك في الغرفة ولا يوجد بوت، ومرت 10 ثواني)
+          const isMatchOver = state.phase === 'ended';
           const timeSinceStart = Date.now() - matchStartTime;
           const opponentLeft = state.soldiers.length === 1 && timeSinceStart > 10000;
 
@@ -1931,7 +1925,6 @@ async function boot() {
             let msg = "";
             let color = "";
 
-                        // 👇 التعديل: إذا انسحب الخصم، نعطي الفوز فقط إذا كان مجموع القتلات 3 أو أكثر (أي في الجولة الرابعة) 👇
             if (opponentLeft && !isMatchOver) {
                 if (totalRounds >= 3) {
                     isWin = true;
@@ -1961,7 +1954,6 @@ async function boot() {
                 color = "#cbd5e1";
             }
 
-            // إرسال النتيجة للسيرفر
             const urlParams = new URLSearchParams(window.location.search);
             const roomCodeParam = urlParams.get('room');
             const userEmailParam = urlParams.get('email');
@@ -1969,19 +1961,13 @@ async function boot() {
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
             if (isWin && userEmailParam) {
-                
-                                if (isTelegramPlatform) {
-                    // 👇 حالة تليجرام: إضافة 3 نقاط عبر سيرفر الحماية 👇
+                if (isTelegramPlatform) {
                     fetch('https://lootearn.top/api/add-points', { 
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email: userEmailParam, amount: 3 })
-                    }).then(res => res.json()).then(data => console.log("تم إضافة 3 نقاط عبر السيرفر الآمن:", data)).catch(err => console.error(err));
-
+                    }).then(res => res.json()).then(data => console.log("✅ تم إضافة 3 نقاط:", data)).catch(err => console.error("❌ خطأ في النقاط:", err));
                 } else if (actualRoomCode) {
-                    // 👇 حالة الموقع (الغرف): استخدام النظام القديم 👇
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
                         method: 'POST',
                         headers: {
@@ -1994,19 +1980,20 @@ async function boot() {
                 }
             }
 
-            // إظهار شاشة النتيجة المخصصة (تغطي شاشة اللعبة الداخلية)
             const winOverlay = document.createElement('div');
             winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
             
-            // 👇 تم تغيير نص الزر إلى "العودة للموقع" 👇
             winOverlay.innerHTML = `
               <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
               <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
-              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للموقع</button>
-            `;            document.getElementById('win-close')!.addEventListener('click', () => {
+              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للبوت</button>
+            `;
+            
+            // 👇 هذا السطر كان ناقصاً وهو سبب عدم ظهور الشاشة 👇
+            document.body.appendChild(winOverlay);
+            
+            document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              
-              // 👇 التعديل: إغلاق النافذة والعودة إلى بوت التليجرام تلقائياً 👇
               if ((window as any).Telegram?.WebApp) {
                   (window as any).Telegram.WebApp.close();
               } else {
@@ -2038,7 +2025,6 @@ async function boot() {
     const t0 = performance.now();
     if (bench && !bench.done && game) bench.drive(dt);
     
-    // 👇 إيقاف مؤقت لمنع التجميد إذا كانت الشاشات مفتوحة 👇
     if (privateOverlay.style.display === 'flex' || waitOverlay.style.display === 'flex') {
         return;
     }
@@ -2055,29 +2041,20 @@ async function boot() {
   let simNow = 0;
   const stepFrames = (n: number, render = true) => { for (let i = 0; i < n; i++) { simNow += 1000 / 30; step(1 / 30, simNow, render && i === n - 1); } return n; };
   const startNow = () => { const action = startAction(); return modeOf(action) === 'online' ? run(action) : start(action); };
-  
-  const autostart = params.get('autostart');
+    const autostart = params.get('autostart');
   const roomParam = params.get('room');
   if (autostart === 'quick') {
     menu.style.display = 'none';
-        privateOverlay.style.display = 'flex';
-          if (autostart === 'quick') {
-    menu.style.display = 'none';
     privateOverlay.style.display = 'flex';
-    loadHilltopAd(); // 👈 أضف هذا السطر هنا
+    loadHilltopAd();
     run('quick');
-  }
-    run('quick'); 
   } 
   else if (autostart === 'create') {
     menu.style.display = 'none';
-    
-    // إظهار اللافتة فوراً
     privateOverlay.style.display = 'flex';
     loadHilltopAd();
     document.getElementById('p-name')!.textContent = (params.get('name') || 'Player') + ' (X)';
     
-    // إظهار الكود من الرابط فوراً
     const urlRoomCode = new URLSearchParams(window.location.search).get('room');
     if (urlRoomCode) {
         const el1 = document.getElementById('p-top-code');
@@ -2086,7 +2063,6 @@ async function boot() {
         if (el2) el2.textContent = urlRoomCode;
     }
 
-    // مسح الذاكرة (البصمة)
     try {
       const urlParams = new URLSearchParams(window.location.search);
       if (!urlParams.has('fresh')) {
@@ -2100,12 +2076,9 @@ async function boot() {
       console.warn("Could not clear storage", e);
     }
     const reqSize = params.get('size') === '6' ? 6 : 1;
-    // جلب كل الخرائط التي تدعم هذا الحجم (1 ضد 1 أو 2 ضد 2)
-    const availableMaps = mapsFor(reqSize, mode);
-    // اختيار خريطة عشوائية من القائمة، وإذا لم توجد نستخدم الخريطة الافتراضية
-    const randomMap = availableMaps.length > 0 ? availableMaps[Math.floor(Math.random() * availableMaps.length)] : map;
     
-    special = { kind: 'invite', mapId: randomMap, mode, size: reqSize };
+    // 👇 التعديل: جعل الخريطة ثابتة مثل العب عبر النت (citadel) 👇
+    special = { kind: 'invite', mapId: 'citadel', mode: 'elimination', size: reqSize };
     run('start'); 
   } 
   else if (roomParam) {
