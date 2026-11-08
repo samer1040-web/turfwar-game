@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [dev]
 
+permissions:
+  contents: write
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -28,7 +31,7 @@ jobs:
           bun install --cwd spacetimedb --frozen-lockfile
           
       - name: Test
-        run: echo "Tests skipped to allow deployment"
+        run: echo "Tests skipped"
         
       - name: Build
         run: bun run build
@@ -36,14 +39,12 @@ jobs:
       - name: Type-check the server module
         run: bun run typecheck:module
 
-      # 👇 الخطوة الجديدة: نسخ الملفات إلى مجلد docs 👇
       - name: Copy build to docs
         run: |
           rm -rf docs
           cp -r dist docs
           touch docs/.nojekyll
 
-      # 👇 رفع الملفات إلى المستودع 👇
       - name: Commit and Push docs
         run: |
           git config --global user.name 'github-actions[bot]'
