@@ -10,7 +10,7 @@ import {
   reportVehicle, resetMatch, switchWeapon, throwGrenade, tickMatch, useAmmoCrate, useWeaponPickup as applyWeaponPickup, TICK_RATE,
 } from '../../shared/match/sim';
 import {
-  AFK, ONLINE_CONFIG, PUBLIC_ROUNDS_TO_WIN, noteAction, type BombState, type BotBrain, type MatchConfig, type MatchEvent, type MatchState, type RoundStats, type Soldier, type Team,
+  AFK, ONLINE_CONFIG, PUBLIC_KILLS_TO_WIN, noteAction, type BombState, type BotBrain, type MatchConfig, type MatchEvent, type MatchState, type RoundStats, type Soldier, type Team,
 } from '../../shared/match/state';
 import { ATTACHMENTS, DEFAULT_WEAPONS, STAMINA, WEAPONS, normalizeAttachments, type AttachmentId, type Attachments, type Slot, type WeaponId } from '../../shared/weapons';
 import { newRoundStats, type BuyItem } from '../../shared/match/economy';
@@ -990,7 +990,7 @@ function publicRooms(ctx: Ctx, size?: number): RoomView[] {
 /** A new public room for a filter: what it names is kept from match to match, what is "any" rotates. */
 function openFor(ctx: Ctx, filter: RoomFilter) {
   const rules = newRoomRules(filter, () => ctx.random());
-  const config: MatchConfig = { ...ONLINE_CONFIG, mode: rules.mode, teamSize: filter.size, roundsToWin: PUBLIC_ROUNDS_TO_WIN };
+  const config: MatchConfig = { ...ONLINE_CONFIG, mode: rules.mode, teamSize: filter.size, killsToWin: PUBLIC_KILLS_TO_WIN };
   // Only rooms opened for a specific map or mode carry the flags (older rooms simply rotate).
   if (rules.fixedMap) config.fixedMap = true;
   if (rules.fixedMode) config.fixedMode = true;
@@ -1112,7 +1112,7 @@ export const tick = spacetimedb.reducer({ onSchedule: tickTable }, { arg: tickTa
         const next = nextRoomRules(state.mapId, state.config.mode, state.config.teamSize, state.config);
         state.mapId = next.mapId;
         // Rooms opened before public matches were shortened pick that up here too.
-        state.config = { ...state.config, mode: next.mode, roundsToWin: PUBLIC_ROUNDS_TO_WIN };
+        state.config = { ...state.config, mode: next.mode, killsToWin: PUBLIC_KILLS_TO_WIN };
       }
       const { def, world } = loadMap(state.mapId);
       const nextSim = { ...sim, map: def, world, nav: loadNav(state.mapId) };
@@ -1195,7 +1195,7 @@ export const startRoom = spacetimedb.reducer({ name: t.string(), size: t.u8(), m
     const error = startRoomError({ size, mode, map: mapId });
     if (error) throw new SenderError(error);
     const mine = isPublic ? { code: '' } : hostCode(ctx);
-    const room = mine.room ?? openRoom(ctx, mapId, { ...ONLINE_CONFIG, ...startRoomConfig({ size, mode, map: mapId, bots, isPublic }), ...(isPublic ? { roundsToWin: PUBLIC_ROUNDS_TO_WIN } : {}) }, mine.code);
+    const room = mine.room ?? openRoom(ctx, mapId, { ...ONLINE_CONFIG, ...startRoomConfig({ size, mode, map: mapId, bots, isPublic }), ...(isPublic ? { killsToWin: PUBLIC_KILLS_TO_WIN } : {}) }, mine.code);
     enterRoom(ctx, room, name, team);
   });
 

@@ -337,10 +337,11 @@ export class Hud {
     this.el.clockBox.dataset.phase = phase;
     this.set('clock', practice ? clock(cfg.roundTime - state.phaseLeft) : clock(state.phaseLeft));
     this.set('round', practice ? t('hud.practice') : phase === 'warmup' ? t('hud.warmup') : phase === 'ended' ? t('hud.matchOver') : phase === 'freeze' ? t('hud.roundBuy', { n: state.round }) : phase === 'over' ? t('hud.roundOver') : t('hud.round', { n: state.round }));
-    this.set('sub', practice ? t('hud.practiceSub') : t('hud.modeSub', { mode: modeName(cfg.mode), n: cfg.roundsToWin }));
+    this.set('sub', practice ? t('hud.practiceSub') : t('hud.modeSub', { mode: modeName(cfg.mode), n: cfg.killsToWin ?? 6 }));
     for (const t of [0, 1] as const) {
       this.set(`s${t}`, String(state.scores[t]));
-      this.set(`p${t}`, `${Math.min(100, state.scores[t] / Math.max(1, cfg.roundsToWin) * 100)}%`, 'width');
+      const teamKills = Math.max(0, ...state.soldiers.filter(s => s.team === t).map(s => s.kills));
+      this.set(`p${t}`, `${Math.min(100, teamKills / Math.max(1, cfg.killsToWin ?? 6) * 100)}%`, 'width');
     }
     this.avatarsTick(state, me);
     this.el.bomb.hidden = !sabotage || state.phase !== 'live' || state.roundPhase === 'over';
@@ -574,7 +575,9 @@ export class Hud {
         <table><tr><th>${t('hud.player')}</th><th>${t('hud.k')}</th><th>${t('hud.d')}</th><th>${t('hud.a')}</th><th>${t('hud.score')}</th><th>${cash ? t('hud.cash') : ''}</th></tr>${rows.map(s => `<tr class="${s.id === myId ? 'me' : ''}${s.alive ? '' : ' dead'}"><td><i class="life"></i>${escape(s.name)}${s.bot ? `<span class="bot">${t('hud.bot')}</span>` : ''}</td><td>${s.kills}</td><td>${s.deaths}</td><td>${s.assists}</td><td>${s.score}</td><td class="money">${cash ? `$${s.money.toLocaleString('en-US')}` : ''}</td></tr>`).join('')}</table></section>`;
     };
     const cfg = state.config;
-    this.set('board', `<header>${escape(t('hud.boardHead', { map: mapName(this.map.id, this.map.name), mode: modeName(cfg.mode), n: state.round, m: cfg.roundsToWin }))}</header>${table(0)}${table(1)}`, 'html');
+    const boardTitle = practice ? t('hud.practiceBoardHead', { map: mapName(this.map.id, this.map.name), mode: modeName(cfg.mode), n: state.round })
+      : t('hud.boardHead', { map: mapName(this.map.id, this.map.name), mode: modeName(cfg.mode), n: state.round, m: cfg.killsToWin ?? 6 });
+    this.set('board', `<header>${escape(boardTitle)}</header>${table(0)}${table(1)}`, 'html');
   }
 
   chatLine(name: string, team: number, text: string, teamOnly: boolean, dead: boolean) {
@@ -718,7 +721,7 @@ export class Hud {
     const top = [...state.soldiers].sort((a, b) => b.score - a.score || b.kills - a.kills).slice(0, 5);
     const winner = w === -1 ? undefined : state.soldiers
       .filter(s => s.team === w)
-      .sort((a, b) => b.score - a.score || b.kills - a.kills)[0];
+      .sort((a, b) => b.kills - a.kills || b.score - a.score)[0];
     this.set('end', `<small>${w === -1 ? t('hud.matchDrawn') : t('hud.winMatch', { team: teamName(w).toUpperCase() })}</small>
       <h2 style="color:${w === -1 ? 'var(--ink)' : TEAM_CSS[w]}">${t(w === -1 ? 'hud.draw' : w === myTeam ? 'hud.victory' : 'hud.defeat')}</h2>
       ${winner ? `<p class="winner-name" style="color:${TEAM_CSS[w]}">${escape(t('hud.winnerName', { name: winner.name }))}</p>` : ''}

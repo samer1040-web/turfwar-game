@@ -48,7 +48,7 @@ browser shooter *BeGone*. It runs on TypeScript and Three.js in the browser and 
 **Gameplay**
 
 - **Two modes:** *Elimination* and *Sabotage* (Militia arms the bomb at site A or B; SWAT defends or
-  disarms). Six rounds per match; the team with more round wins takes it, and a 3–3 tie is a draw.
+  disarms). Matches end when a player reaches six kills; rounds continue until then.
   One life per round, a 4 s freeze and 20 s of buy time.
 - **Thirteen maps:** Ximending (西門町), Taipei 101 · Xinyi, Taipei 101 · 88F with its tuned mass damper,
   Memorial Hall (中正紀念堂), Sanchong (三重) across the river, homages to BeGone's maps and original

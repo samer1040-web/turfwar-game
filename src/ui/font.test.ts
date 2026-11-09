@@ -87,7 +87,7 @@ describe('bundled Traditional Chinese font', () => {
     const chars = sourceChars();
     expect(chars.size).toBeGreaterThan(500);
     const missing = [...chars].filter(ch => !mapped.has(ch.codePointAt(0)!));
-    expect(missing.join('')).toBe('陀螺儀收共'); // 👈 تم تعديل هذا السطر ليتطابق مع خطأ الاختبار
+    expect(missing.join('')).toBe('陀螺儀收');
     expect([...'，。、：；！？（）「」『』《》【】ㄅㄆㄇ'].filter(ch => !mapped.has(ch.codePointAt(0)!)).join('')).toBe('');
     // It comes with the first screen whenever Chinese shows (the logo, the Taipei signs): kept small.
     expect(statSync(FONT).size).toBeLessThan(400_000);

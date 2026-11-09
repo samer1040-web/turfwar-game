@@ -381,6 +381,7 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
 }
 
 function endRound(state: MatchState, ctx: SimContext, winner: -1 | Team, reason: RoundEnd) {
+  if (state.phase !== 'live') return;
   state.roundPhase = 'over'; state.phaseLeft = state.config.roundOverTime; state.roundWinner = winner;
   state.bomb.by = -1;
   if (winner !== -1) {
@@ -400,13 +401,6 @@ function endRound(state: MatchState, ctx: SimContext, winner: -1 | Team, reason:
     s.using = false;
   }
   ctx.emit({ type: 'round', phase: 'over', round: state.round, winner, reason });
-  const reachedWinTarget = winner !== -1 && state.scores[winner] >= state.config.roundsToWin;
-  const reachedRoundCap = state.config.maxRounds !== undefined && state.round >= state.config.maxRounds;
-  if (reachedWinTarget || reachedRoundCap) {
-    const matchWinner: -1 | Team = reachedWinTarget ? winner : state.scores[0] === state.scores[1] ? -1 : state.scores[0] > state.scores[1] ? 0 : 1;
-    state.phase = 'ended'; state.phaseLeft = state.config.matchOverTime; state.winner = matchWinner;
-    ctx.emit({ type: 'phase', phase: 'ended', winner: matchWinner });
-  }
 }
 
 function updateBomb(state: MatchState, ctx: SimContext, dt: number) {
@@ -445,7 +439,7 @@ function updateBomb(state: MatchState, ctx: SimContext, dt: number) {
 }
 
 function checkRoundEnd(state: MatchState, ctx: SimContext) {
-  if (state.config.practice) return;
+  if (state.config.practice || state.phase !== 'live') return;
   const alive = [0, 1].map(t => state.soldiers.some(s => s.team === t && s.alive));
   const present = [0, 1].map(t => state.soldiers.some(s => s.team === t));
   if (!present[0] || !present[1]) return;
@@ -519,8 +513,8 @@ export function tickMatch(state: MatchState, ctx: SimContext, dt: number) {
   stepWorld(state, ctx, dt);
   if (state.phase === 'live' && state.roundPhase === 'live') {
     if (modeOf(state, ctx.map) === 'sabotage') updateBomb(state, ctx, dt);
-    if (state.roundPhase === 'live') checkRoundEnd(state, ctx);
-    if (state.roundPhase === 'live' && state.phaseLeft <= 0) timeOut(state, ctx);
+    if (state.phase === 'live' && state.roundPhase === 'live') checkRoundEnd(state, ctx);
+    if (state.phase === 'live' && state.roundPhase === 'live' && state.phaseLeft <= 0) timeOut(state, ctx);
   }
 }
 

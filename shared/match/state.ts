@@ -131,10 +131,8 @@ export interface MatchConfig {
   mode: Mode;
   /** Soldiers per team; bots fill the gaps left by humans. */
   teamSize: number;
-  /** Round wins needed for the match. */
-  roundsToWin: number;
-  /** Total-round cap; when scores are tied at the cap, the match is drawn. */
-  maxRounds?: number;
+  /** Individual kills needed to win the match. */
+  killsToWin?: number;
   /** Seconds per round (Sabotage on single-bomb maps uses `roundTimeSingle`). */
   roundTime: number;
   roundTimeSingle: number;
@@ -163,8 +161,8 @@ export interface MatchConfig {
   fixedMode?: boolean;
 }
 
-/** Competitive matches play six rounds; practice has no round cap. */
-const COMPETITIVE = { roundsToWin: 6, maxRounds: undefined, bombTime: 40, armTime: 5, disarmTime: 5, freezeTime: 4, roundOverTime: 5, matchOverTime: 10, buyTime: 20 };
+/** Competitive matches end when a soldier reaches six kills; practice has no kill limit. */
+const COMPETITIVE = { killsToWin: 6, bombTime: 40, armTime: 5, disarmTime: 5, freezeTime: 4, roundOverTime: 5, matchOverTime: 10, buyTime: 20 };
 export const ELIMINATION: MatchConfig = { ...COMPETITIVE, mode: 'elimination', teamSize: 6, roundTime: 120, roundTimeSingle: 120, warmup: 3, botSkill: 0.45 };
 export const SABOTAGE: MatchConfig = { ...COMPETITIVE, mode: 'sabotage', teamSize: 6, roundTime: 90, roundTimeSingle: 120, warmup: 3, botSkill: 0.45 };
 export const OFFLINE_CONFIG = ELIMINATION;
@@ -172,10 +170,10 @@ export const OFFLINE_CONFIG = ELIMINATION;
 export const ONLINE_CONFIG: MatchConfig = { ...ELIMINATION, warmup: 8, botSkill: 0.3 };
 /**
  * The server uses this target for Quick Play and Play Online. Private rooms and Solo use the same
- * six-round limit through ELIMINATION and SABOTAGE.
+ * six-kill limit through ELIMINATION and SABOTAGE.
  */
-export const PUBLIC_ROUNDS_TO_WIN = 6;
-export const PRACTICE_CONFIG: MatchConfig = { ...ELIMINATION, teamSize: 0, roundsToWin: 1000, maxRounds: undefined, roundTime: 3600, warmup: 1, botSkill: 0.4, practice: true, freeBuy: true };
+export const PUBLIC_KILLS_TO_WIN = 6;
+export const PRACTICE_CONFIG: MatchConfig = { ...ELIMINATION, teamSize: 0, killsToWin: undefined, roundTime: 3600, warmup: 1, botSkill: 0.4, practice: true, freeBuy: true };
 
 export interface BombState {
   /** Index into the map's bomb sites being armed or armed (-1 = none). */

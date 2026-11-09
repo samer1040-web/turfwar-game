@@ -108,9 +108,17 @@ export function applyDamage(state: MatchState, ctx: SimContext, target: Soldier,
 export function killSoldier(state: MatchState, ctx: SimContext, victim: Soldier, killer: Soldier | undefined, weapon: string, head: boolean) {
   victim.alive = false; victim.deaths++; victim.health = 0;
   victim.reloadLeft = 0; victim.m.vx = 0; victim.m.vz = 0; victim.using = false;
+  let matchEnded = false;
   if (killer && killer.team !== victim.team) {
     state.lastKillTeam = killer.team;
     killer.kills++;
+    const killTarget = state.config.killsToWin ?? 6;
+    if (!state.config.practice && state.phase === 'live' && killTarget > 0 && killer.kills >= killTarget) {
+      state.phase = 'ended';
+      state.phaseLeft = state.config.matchOverTime;
+      state.winner = killer.team;
+      matchEnded = true;
+    }
   }
   // Assists: anyone else who hurt the victim in its last 3 seconds.
   const helped = new Set<number>();
@@ -122,6 +130,7 @@ export function killSoldier(state: MatchState, ctx: SimContext, victim: Soldier,
   }
   victim.round.hits = [];
   ctx.emit({ type: 'kill', killer: killer?.id ?? -1, victim: victim.id, weapon, head });
+  if (matchEnded) ctx.emit({ type: 'phase', phase: 'ended', winner: state.winner });
 }
 
 /** Spread cone (degrees) for a soldier's current state. */

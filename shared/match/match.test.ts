@@ -81,7 +81,7 @@ describe('maps and navigation', () => {
 
 describe('bot matches', () => {
   it('Elimination: bots fight whole rounds to a result, then the next round deploys', () => {
-    const { ctx, state, events } = setup({ ...ELIMINATION, teamSize: 5, warmup: 0, roundsToWin: 10, maxRounds: undefined }, 7);
+    const { ctx, state, events } = setup({ ...ELIMINATION, teamSize: 5, warmup: 0, killsToWin: 100 }, 7);
     balanceTeams(state, ctx);
     tick(state, ctx, 240);
     expect(events.filter(e => e.type === 'kill').length).toBeGreaterThan(8);
@@ -190,12 +190,10 @@ describe('rounds', () => {
     return { ...env, a, b };
   }
 
-  it('uses six rounds for competitive matches and leaves practice uncapped', () => {
-    expect(ELIMINATION.roundsToWin).toBe(6);
-    expect(ELIMINATION.maxRounds).toBe(6);
-    expect(SABOTAGE.roundsToWin).toBe(6);
-    expect(SABOTAGE.maxRounds).toBe(6);
-    expect(PRACTICE_CONFIG.maxRounds).toBeUndefined();
+  it('uses six kills to win and leaves practice without a kill limit', () => {
+    expect(ELIMINATION.killsToWin).toBe(6);
+    expect(SABOTAGE.killsToWin).toBe(6);
+    expect(PRACTICE_CONFIG.killsToWin).toBeUndefined();
   });
 
   it('does not end early when one team reaches four round wins', () => {
@@ -253,39 +251,39 @@ describe('rounds', () => {
     expect(state.scores).toEqual([0, 0]);
   });
 
-  it('first to the round limit wins the match, which then restarts with fresh inventories', () => {
-    const { state, ctx, a, b } = teams({ ...ELIMINATION, roundsToWin: 2 });
+  it('ends the match on a player’s sixth kill, then restarts with fresh match stats', () => {
+    const { state, ctx, a, b, events } = teams();
     a.money = 9000;
-    for (let r = 0; r < 2; r++) {
-      b.health = 0; b.alive = false;
-      tick(state, ctx, 0.1);
-      if (state.phase !== 'ended') tick(state, ctx, state.config.roundOverTime + state.config.freezeTime + 0.1);
-    }
-    expect(state.phase).toBe('ended'); expect(state.winner).toBe(0);
+    a.kills = 5;
+    killSoldier(state, ctx, b, a, 'mp5', false);
+    expect(state.phase).toBe('ended');
+    expect(state.winner).toBe(a.team);
+    expect(events.some(e => e.type === 'phase' && e.phase === 'ended' && e.winner === a.team)).toBe(true);
     tick(state, ctx, state.config.matchOverTime + 0.1);
     expect(state.phase).toBe('live'); expect(state.scores).toEqual([0, 0]);
     expect(a.money).toBe(CASH.matchBonus);
+    expect(a.kills).toBe(0);
   });
 
-  it('ends a six-round match in a draw when both teams have won three rounds', () => {
+  it('does not apply the kill limit in practice', () => {
+    const env = setup(PRACTICE_CONFIG);
+    const a = addSoldier(env.state, env.ctx, { name: 'A', team: 0, bot: false });
+    const b = addSoldier(env.state, env.ctx, { name: 'B', team: 1, bot: false });
+    resetMatch(env.state, env.ctx);
+    a.kills = 5;
+    killSoldier(env.state, env.ctx, b, a, 'mp5', false);
+    expect(env.state.phase).toBe('live');
+    expect(env.state.winner).toBe(-1);
+  });
+
+  it('does not end a match at six rounds when nobody has six kills', () => {
     const { state, ctx, events } = teams();
     state.scores = [3, 3];
-    state.round = state.config.maxRounds!;
-    tick(state, ctx, state.config.roundTime + 0.2);
-    expect(state.phase).toBe('ended');
-    expect(state.winner).toBe(-1);
-    expect(events.some(e => e.type === 'phase' && e.phase === 'ended' && e.winner === -1)).toBe(true);
-  });
-
-  it('decides the match after round six by the team with more round wins', () => {
-    const { state, ctx, a, b } = teams();
-    state.scores = [3, 2];
     state.round = 6;
-    b.alive = false; b.health = 0;
-    tick(state, ctx, 0.1);
-    expect(state.phase).toBe('ended');
-    expect(state.scores).toEqual([4, 2]);
-    expect(state.winner).toBe(a.team);
+    tick(state, ctx, state.config.roundTime + 0.2);
+    expect(state.phase).toBe('live');
+    expect(state.roundPhase).toBe('over');
+    expect(events.some(e => e.type === 'phase' && e.phase === 'ended')).toBe(false);
   });
 
   it('Sabotage: holding use still on a site for 5 s arms the bomb; 40 s later it blows', () => {

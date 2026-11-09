@@ -1192,7 +1192,7 @@ const invite = challenge ? undefined : parseInvite(place.pathname, place.search)
 if (invite) noteArrival(invite.ref);
 if (invite) track('invite_link_opened', { ref: invite.ref ?? '' }, { setOnce: { ref_by: invite.ref ?? '' } });
 
-const WARMUP = { mapId: 'citadel', teamSize: 1, roundsToWin: 4, botSkill: 0.2 };
+const WARMUP = { mapId: 'citadel', teamSize: 1, killsToWin: 6, botSkill: 0.2 };
 const warmupDue = () => CRAZYGAMES && !benchMode && !store.get('warmup', '') && loadProgress().rounds === 0
   && !challenge && !invite && !crazyInstantMultiplayer() && !params.get('room') && !params.get('autostart');
 
@@ -1270,7 +1270,7 @@ function startedDuel(duel: Duel, link: GameLink) {
   if (duel.kind === 'joinInvite') { track('invite_joined', { ref: duel.ref, joined: true }); return; }
   if (duel.kind === 'warmup') {
     store.set('warmup', '1');
-    game?.notice(t('warmup.notice', { n: WARMUP.roundsToWin }), 10000);
+    game?.notice(t('warmup.notice', { n: WARMUP.killsToWin }), 10000);
     game?.onward(t('warmup.online'), () => { backToLobby('menu', '', 'end_screen'); if (online.ok) run('quick'); });
     return;
   }
@@ -1435,7 +1435,7 @@ async function start(action: Action, retried = false) {
     link = via === 'online'
       ? await connectOnline(name, teamChoice, how, s => { status.textContent = s; }, { reuse: lobbyLink, before: assetsLoad })
       : warm
-        ? new OfflineLink(WARMUP.mapId, name, undefined, { noBots: true,...ELIMINATION, teamSize: WARMUP.teamSize, roundsToWin: WARMUP.roundsToWin, botSkill: WARMUP.botSkill })
+        ? new OfflineLink(WARMUP.mapId, name, undefined, { noBots: true,...ELIMINATION, teamSize: WARMUP.teamSize, killsToWin: WARMUP.killsToWin, botSkill: WARMUP.botSkill })
       : duel?.kind === 'fallback'
         ? new OfflineLink(duel.mapId, name, undefined, { ...ELIMINATION, teamSize: 1, botSkill }, false, duel.c.name)
       : via === 'lab'
@@ -1938,15 +1938,15 @@ async function boot() {
                     msg = "Opponent left too early. No points awarded.";
                     color = "#cbd5e1";
                 }
-            } else if (myScore > oppScore) {
+            } else if (state.winner === me.team) {
                 isWin = true;
                 title = "Congratulations, you won! 🏆";
-                msg = `Score: ${myScore} - ${oppScore}`;
+                msg = `Kills to win: ${state.config.killsToWin ?? 6}`;
                 color = "#f59e0b";
-            } else if (myScore < oppScore) {
+            } else if (state.winner === 1 - me.team) {
                 isWin = false;
                 title = "You lost 😢";
-                msg = `Score: ${myScore} - ${oppScore}`;
+                msg = `Kills to win: ${state.config.killsToWin ?? 6}`;
                 color = "#ef4444";
             } else {
                 isDraw = true;
@@ -1960,6 +1960,8 @@ async function boot() {
             const userEmailParam = urlParams.get('email');
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
+            const returnUrl = isTelegramPlatform ? 'https://t.me/LootEarnGames_bot' : window.location.origin;
+            const returnLabel = isTelegramPlatform ? 'العودة للبوت' : t('hud.leaveMatch');
 
             if (isWin && userEmailParam) {
                 if (isTelegramPlatform) {
@@ -1991,16 +1993,16 @@ async function boot() {
             winOverlay.innerHTML = `
               <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
               <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
-              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للبوت</button>
+              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">${returnLabel}</button>
             `;
             
             document.body.appendChild(winOverlay);
             
                         document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              window.close(); // يغلق نافذة اللعبة ويعيدك لتليجرام
+              window.close();
               setTimeout(() => {
-                window.location.href = 'https://t.me/LootEarnGames_bot';
+                window.location.href = returnUrl;
               }, 300);
             });
             
