@@ -265,6 +265,28 @@ describe('rounds', () => {
     expect(a.kills).toBe(0);
   });
 
+  it('does not end at a 4–2 kill score; it ends only when one player reaches six', () => {
+    const { state, ctx, a, b } = teams();
+    a.kills = 3;
+    b.kills = 1;
+    killSoldier(state, ctx, b, a, 'mp5', false);
+    b.alive = true; b.health = 100;
+    killSoldier(state, ctx, a, b, 'mp5', false);
+    expect([a.kills, b.kills]).toEqual([4, 2]);
+    expect(state.phase).toBe('live');
+
+    for (let kills = 5; kills < 6; kills++) {
+      b.alive = true; b.health = 100;
+      killSoldier(state, ctx, b, a, 'mp5', false);
+      expect(state.phase).toBe('live');
+    }
+    b.alive = true; b.health = 100;
+    killSoldier(state, ctx, b, a, 'mp5', false);
+    expect(a.kills).toBe(6);
+    expect(state.phase).toBe('ended');
+    expect(state.winner).toBe(a.team);
+  });
+
   it('does not apply the kill limit in practice', () => {
     const env = setup(PRACTICE_CONFIG);
     const a = addSoldier(env.state, env.ctx, { name: 'A', team: 0, bot: false });
