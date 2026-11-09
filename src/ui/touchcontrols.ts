@@ -104,12 +104,6 @@ export function holdTouchAction(input: Pick<Input, 'touchHeld' | 'touchPress'>, 
   if (action === 'use') input.touchPress(action);
 }
 
-export function touchUseAction(input: Pick<Input, 'touchHeld' | 'touchPress'>, useWeaponPickup: () => boolean) {
-  if (useWeaponPickup()) return true;
-  holdTouchAction(input, 'use');
-  return false;
-}
-
 export function toggleTouchAction(input: Pick<Input, 'touchHeld' | 'touchPress'>, action: ActionId) {
   if (input.touchHeld.has(action)) input.touchHeld.delete(action);
   else input.touchHeld.set(action, 1);
@@ -144,7 +138,6 @@ export class TouchControls {
   constructor(container: HTMLElement, private readonly input: Input, private readonly ui: {
     typeChat: (team: boolean) => void;
     say: (text: string, team: boolean) => void;
-    useWeaponPickup: () => boolean;
   }) {
     this.root.className = 'touch-layer';
     this.root.setAttribute('aria-label', 'Touch controls');
@@ -276,14 +269,6 @@ export class TouchControls {
     }
     if (id === 'stick') {
       this.beginStick(e);
-      return;
-    }
-    if (id === 'use') {
-      const pickupHandled = touchUseAction(this.input, this.ui.useWeaponPickup);
-      this.activeButtons.set(e.pointerId, { id, action: 'use', kind: pickupHandled ? 'tap' : 'hold' });
-      this.root.setPointerCapture(e.pointerId);
-      this.buttons.get(id)?.classList.add('active');
-      e.preventDefault();
       return;
     }
     const { action, kind } = controlAction(id, touchLayout());

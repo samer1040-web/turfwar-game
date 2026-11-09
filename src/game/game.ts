@@ -254,21 +254,6 @@ export class Game {
       if (on && !this.touch) this.touch = new TouchControls(container, this.input, {
         typeChat: team => { this.input.clear(); this.hud.openChat(team, text => this.link.say(text, team), true); },
         say: (text, team) => this.link.say(text, team),
-        useWeaponPickup: () => {
-          const state = this.link.state();
-          const me = state?.soldiers.find(s => s.id === this.link.myId());
-          if (!state || !this.input.touch || !me?.alive || this.seated || this.nearVehicle >= 0) return false;
-          const index = this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups);
-          if (index < 0 || this.crates.nearest(this.player.m.x, this.player.m.y, this.player.m.z, CRATE_REACH) >= 0) return false;
-          const site = modeOf(state, this.map.def) === 'sabotage' ? this.siteHere(state) : -1;
-          const myJob = state.bomb.armed ? me.team !== ATTACKERS && site === state.bomb.site : me.team === ATTACKERS && site >= 0;
-          if (myJob && site >= 0) return false;
-          const now = performance.now();
-          this.link.useWeaponPickup(index);
-          this.weaponPickupRetry = { index, at: now + 300, until: now + 2000 };
-          this.audio.ui();
-          return true;
-        },
       });
       else if (!on && this.touch) { this.touch.dispose(); this.touch = undefined; }
       this.input.touch = on;

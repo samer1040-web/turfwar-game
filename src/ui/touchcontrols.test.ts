@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultLayout } from '../game/touchlayout';
 import type { ActionId } from '../game/keybinds';
-import { controlHtml, holdTouchAction, moveTouchLook, toggleTouchAction, touchUseAction } from './touchcontrols';
+import { controlHtml, holdTouchAction, moveTouchLook, toggleTouchAction } from './touchcontrols';
 
 describe('touch control labels', () => {
   it('renders visible icon buttons instead of text-only controls', () => {
@@ -25,35 +25,7 @@ describe('touch control labels', () => {
 });
 
 describe('touch use action', () => {
-  it('sends a weapon pickup directly from the touch use button', () => {
-    const held = new Map();
-    const pressed = new Set();
-    let pickups = 0;
-    const handled = touchUseAction(
-      { touchHeld: held, touchPress: action => pressed.add(action) },
-      () => { pickups++; return true; },
-    );
-
-    expect(handled).toBe(true);
-    expect(pickups).toBe(1);
-    expect(held.size).toBe(0);
-    expect(pressed.size).toBe(0);
-  });
-
-  it('falls back to the regular use action when no weapon is in reach', () => {
-    const held = new Map();
-    const pressed = new Set();
-    const handled = touchUseAction(
-      { touchHeld: held, touchPress: action => pressed.add(action) },
-      () => false,
-    );
-
-    expect(handled).toBe(false);
-    expect(held.get('use')).toBe(1);
-    expect(pressed.has('use')).toBe(true);
-  });
-
-  it('fires one use press while retaining the held state', () => {
+  it('routes use through the regular input path while held', () => {
     const held = new Map();
     const pressed = new Set();
     holdTouchAction({ touchHeld: held, touchPress: action => pressed.add(action) }, 'use');
