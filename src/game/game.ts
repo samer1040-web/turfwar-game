@@ -130,6 +130,7 @@ export class Game {
   readonly driving = new Driving();
   private seated?: { index: number; seat: 0 | 1 };
   private nearVehicle = -1;
+  private weaponPickupRetryAt = 0;
   private selfView?: SoldierView;
   private engines = new Map<number, EngineVoice>();
   private skids = new SkidMarks();
@@ -362,13 +363,25 @@ export class Game {
       if (this.input.take('store') && me) { this.buymenu.show(this.player.weapons[this.player.slot === 2 ? 0 : this.player.slot]); this.input.clear(); }
       const chat = this.input.take('chat') ? false : this.input.take('teamChat') ? true : undefined;
       if (chat !== undefined && !chatDisabled()) { this.input.clear(); this.hud.openChat(chat, text => this.link.say(text, chat)); }
-      if ((this.seated ? this.input.take('exitVehicle') : this.input.take('use')) && me?.alive) {
+      const usePressed = this.seated ? this.input.take('exitVehicle') : this.input.take('use');
+      if (usePressed && me?.alive) {
         const i = this.crates.nearest(this.player.m.x, this.player.m.y, this.player.m.z, CRATE_REACH);
         const weaponPickup = this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups);
         if (this.seated) { link.exitVehicle(); this.audio.door(); }
         else if (this.nearVehicle >= 0) { link.enterVehicle(this.nearVehicle); this.audio.door(); }
         else if (i >= 0) { link.useCrate(i); this.audio.ui(); }
-        else if (weaponPickup >= 0) { link.useWeaponPickup(weaponPickup); this.audio.ui(); }
+        else if (weaponPickup >= 0) {
+          link.useWeaponPickup(weaponPickup); this.audio.ui();
+          this.weaponPickupRetryAt = performance.now() + 300;
+        }
+      } else if (me?.alive && !this.seated && this.input.down('use') && performance.now() >= this.weaponPickupRetryAt
+        && state.phase !== 'ended' && state.roundPhase !== 'over') {
+        const weaponPickup = this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups);
+        const crate = this.crates.nearest(this.player.m.x, this.player.m.y, this.player.m.z, CRATE_REACH);
+        if (weaponPickup >= 0 && this.nearVehicle < 0 && crate < 0 && !(myJob && site >= 0)) {
+          link.useWeaponPickup(weaponPickup);
+          this.weaponPickupRetryAt = performance.now() + 300;
+        }
       }
     }
     this.hud.scoreboard(this.input.down('scoreboard'), state, myId);
@@ -640,7 +653,8 @@ export class Game {
       const kind = seat ? state.vehicles[seat.index]?.kind : undefined;
       const scope = !seat ? 'foot' : seat.seat === 1 ? 'passenger' : kind === 'heli' ? 'heli' : 'car';
       const crate = this.crates.nearest(p.m.x, p.m.y, p.m.z, CRATE_REACH) >= 0 && p.slot !== 2;
-      const weaponPickup = this.weaponPickups.nearest(p.m.x, p.m.y, p.m.z, WEAPON_PICKUP_REACH, state.weaponPickups) >= 0;
+      const weaponPickup = state.phase !== 'ended' && state.roundPhase !== 'over'
+        && this.weaponPickups.nearest(p.m.x, p.m.y, p.m.z, WEAPON_PICKUP_REACH, state.weaponPickups) >= 0;
       if (scope === 'foot') use = this.nearVehicle >= 0 ? 'vehicle' : myJob && site >= 0 && live ? (state.bomb.armed ? 'disarm' : 'arm') : crate ? 'crate' : weaponPickup ? 'weapon' : undefined;
       ctx = {
         scope, scooter: kind === 'scooter', use: !!use, melee: p.slot === 2, throwable: p.slot === 2 && p.slippers > 0,
@@ -940,13 +954,23 @@ export class Game {
       return `${kbd('use')} ${near.driver >= 0 ? t('hud.rideAlong', { name }) : t(near.kind === 'car' ? 'hud.enterCar' : near.kind === 'scooter' ? 'hud.enterScooter' : 'hud.enterHeli', { name })}`;
     }
     if (me && !me.alive && !this.deployed && state.phase === 'live' && state.roundPhase === 'live') return t('hud.deployNext');
-    if (!me?.alive || state.roundPhase !== 'live') return '';
+    if (!me?.alive) return '';
+    if (state.roundPhase === 'freeze') {
+      const pickup = state.phase !== 'ended'
+        ? this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups)
+        : -1;
+      const weapon = this.weaponPickups.weapon(pickup);
+      return weapon ? `${kbd('use')} ${t('hud.pickupWeapon', { weapon: WEAPONS[weapon].name })}` : '';
+    }
+    if (state.roundPhase !== 'live') return '';
     if (this.player.slot === 2 && this.player.slippers > 0 && this.player.windup <= 0 && !touchActive()) return t('hud.throwHint', { key: kbd('aim') });
     if (site >= 0 && myJob) return state.bomb.armed ? t('hud.holdDisarm', { key: kbd('use') }) : t('hud.holdArm', { key: kbd('use'), site: this.map.def.sabotage!.sites[site] });
     if (this.crates.nearest(this.player.m.x, this.player.m.y, this.player.m.z, CRATE_REACH) >= 0 && this.player.slot !== 2) {
       return `${kbd('use')} ${t('hud.crate')}${me.round.crate || state.config.freeBuy ? '' : ` ($${CASH.crate})`}`;
     }
-    const pickup = this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups);
+    const pickup = state.phase !== 'ended'
+      ? this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups)
+      : -1;
     const weapon = this.weaponPickups.weapon(pickup);
     if (weapon) return `${kbd('use')} ${t('hud.pickupWeapon', { weapon: WEAPONS[weapon].name })}`;
     return '';
