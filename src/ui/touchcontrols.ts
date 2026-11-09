@@ -225,11 +225,8 @@ export class TouchControls {
       return;
     }
     const { action, kind } = controlAction(id, touchLayout());
-    if (kind === 'hold') this.input.touchHeld.set(action, 1);
-    else if (kind === 'toggle') {
-      if (this.input.touchHeld.has(action)) this.unbind(action);
-      else this.input.touchHeld.set(action, 1);
-    } else this.input.touchPress(action);
+    this.input.touchPress(action);
+    if (kind === 'hold' || kind === 'toggle') this.input.touchHeld.set(action, 1);
     this.activeButtons.set(e.pointerId, { id, action, kind });
     this.root.setPointerCapture(e.pointerId);
     const el = this.buttons.get(id);
@@ -246,7 +243,7 @@ export class TouchControls {
     const active = this.activeButtons.get(e.pointerId);
     if (active) {
       this.activeButtons.delete(e.pointerId);
-      if (active.kind === 'hold' && ![...this.activeButtons.values()].some(button => button.action === active.action && button.kind === 'hold')) this.unbind(active.action);
+      if (active.kind !== 'tap' && ![...this.activeButtons.values()].some(button => button.action === active.action && button.kind !== 'tap')) this.unbind(active.action);
       if (![...this.activeButtons.values()].some(button => button.id === active.id)) this.buttons.get(active.id)?.classList.remove('active');
     }
     this.endStick(e.pointerId);
@@ -298,7 +295,6 @@ export class TouchControls {
       el.setAttribute('aria-label', el.title);
       const action = controlAction(id, layout).action;
       el.dataset.action = action;
-      el.classList.toggle('on', this.input.down(action));
     }
   }
 }
