@@ -1998,11 +1998,7 @@ async function boot() {
             
             document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              if ((window as any).Telegram?.WebApp) {
-                  (window as any).Telegram.WebApp.close();
-              } else {
-                  window.location.href = 'https://t.me/LootEarnGames_bot';
-              }
+              window.location.href = 'https://t.me/LootEarnGames_bot';
             });
             
             return;
