@@ -130,7 +130,7 @@ export class Game {
   readonly driving = new Driving();
   private seated?: { index: number; seat: 0 | 1 };
   private nearVehicle = -1;
-  private weaponPickupRetryAt = 0;
+  private weaponPickupRetry?: { index: number; at: number; until: number };
   private selfView?: SoldierView;
   private engines = new Map<number, EngineVoice>();
   private skids = new SkidMarks();
@@ -371,16 +371,22 @@ export class Game {
         else if (this.nearVehicle >= 0) { link.enterVehicle(this.nearVehicle); this.audio.door(); }
         else if (i >= 0) { link.useCrate(i); this.audio.ui(); }
         else if (weaponPickup >= 0) {
+          const now = performance.now();
           link.useWeaponPickup(weaponPickup); this.audio.ui();
-          this.weaponPickupRetryAt = performance.now() + 300;
+          this.weaponPickupRetry = { index: weaponPickup, at: now + 300, until: now + 2000 };
         }
-      } else if (me?.alive && !this.seated && this.input.down('use') && performance.now() >= this.weaponPickupRetryAt
-        && state.phase !== 'ended' && state.roundPhase !== 'over') {
+      }
+      const pendingPickup = this.weaponPickupRetry;
+      if (pendingPickup) {
+        const now = performance.now();
         const weaponPickup = this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups);
         const crate = this.crates.nearest(this.player.m.x, this.player.m.y, this.player.m.z, CRATE_REACH);
-        if (weaponPickup >= 0 && this.nearVehicle < 0 && crate < 0 && !(myJob && site >= 0)) {
-          link.useWeaponPickup(weaponPickup);
-          this.weaponPickupRetryAt = performance.now() + 300;
+        if (!me?.alive || this.seated || state.phase === 'ended' || state.roundPhase === 'over'
+          || state.weaponPickups[pendingPickup.index] === false || weaponPickup !== pendingPickup.index
+          || this.nearVehicle >= 0 || crate >= 0 || (myJob && site >= 0) || now >= pendingPickup.until) this.weaponPickupRetry = undefined;
+        else if (now >= pendingPickup.at) {
+          link.useWeaponPickup(pendingPickup.index);
+          pendingPickup.at = now + 300;
         }
       }
     }
