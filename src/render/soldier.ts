@@ -199,6 +199,26 @@ function gearMaterials(look: Look, team: number) {
 const bodyMaterial = (original: THREE.MeshStandardMaterial) =>
   new THREE.MeshStandardMaterial({ vertexColors: true, normalMap: original.normalMap, roughness: 0.84, metalness: 0.04, normalScale: new THREE.Vector2(1.2, 1.2) });
 
+export function tintEnemyFragmentShader(fragmentShader: string) {
+  return fragmentShader.replace(
+    '#include <color_fragment>',
+    '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.08, 0.08), 0.32);',
+  );
+}
+
+export function enemyHighlightMaterial(source: THREE.Material) {
+  const material = source.clone();
+  const compile = material.onBeforeCompile;
+  const cacheKey = material.customProgramCacheKey;
+  material.onBeforeCompile = (shader, renderer) => {
+    compile.call(material, shader, renderer);
+    shader.fragmentShader = tintEnemyFragmentShader(shader.fragmentShader);
+  };
+  material.customProgramCacheKey = () => `${cacheKey.call(material)}|enemy-red-highlight`;
+  material.needsUpdate = true;
+  return material;
+}
+
 /** Soldiers are varied by a running counter: Militia mix their shirts, trousers and scarves. */
 let spawned = 0;
 
@@ -333,6 +353,9 @@ export class SoldierView {
 
   private crew: boolean;
   private squatDrop = 0;
+  private highlighted = false;
+  private readonly originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  private readonly enemyMaterials = new Set<THREE.Material>();
 
   /** The knife skin this soldier holds (shared/skins.ts). */
   private knifeSkin: KnifeSkin;
@@ -390,6 +413,34 @@ export class SoldierView {
     this.guns.get('knife')?.removeFromParent();
     this.guns.delete('knife');
     if (this.currentGun === 'knife') this.shown = '';
+  }
+
+  setEnemyHighlight(enabled: boolean) {
+    if (enabled === this.highlighted) return;
+    this.highlighted = enabled;
+    if (enabled) {
+      const bySource = new Map<THREE.Material, THREE.Material>();
+      this.model.traverse(object => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        this.originalMaterials.set(mesh, mesh.material);
+        const highlight = (source: THREE.Material) => {
+          let material = bySource.get(source);
+          if (!material) {
+            material = enemyHighlightMaterial(source);
+            bySource.set(source, material);
+            this.enemyMaterials.add(material);
+          }
+          return material;
+        };
+        mesh.material = Array.isArray(mesh.material) ? mesh.material.map(highlight) : highlight(mesh.material);
+      });
+      return;
+    }
+    for (const [mesh, material] of this.originalMaterials) mesh.material = material;
+    this.originalMaterials.clear();
+    for (const material of this.enemyMaterials) material.dispose();
+    this.enemyMaterials.clear();
   }
 
   /** Show weapon `id` with `attachments` (models and fitted parts are built on first use). */
@@ -693,6 +744,7 @@ export class SoldierView {
   }
 
   dispose() {
+    this.setEnemyHighlight(false);
     this.mixer.stopAllAction();
     this.root.removeFromParent();
   }

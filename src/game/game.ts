@@ -1014,6 +1014,7 @@ export class Game {
         r = { view, buffer: new InterpBuffer(), pos: new THREE.Vector3(s.m.x, s.m.y, s.m.z), crouch: 0, yaw: s.yaw, pitch: 0, stepDist: 0, peek: 0, peekSide: 0 };
         this.remotes.set(s.id, r);
       }
+      r.view.setEnemyHighlight(s.team !== this.myTeam);
       r.view.setKnifeSkin(skin.knife);
       const last = r.buffer.latest();
       if (last && Math.hypot(last.x - s.m.x, last.z - s.m.z) > 6) r.buffer.clear();

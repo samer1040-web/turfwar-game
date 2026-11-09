@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import { wrapAngle } from '../../shared/math';
 import { RIDER_TWIST, riderTwist } from '../../shared/vehicles';
-import { bodyFacing, riderPitch, stanceBlade } from './soldier';
+import { bodyFacing, enemyHighlightMaterial, riderPitch, stanceBlade, tintEnemyFragmentShader } from './soldier';
 
 describe('scooter riders stay on the bike', () => {
   it('a rider faces the bike whatever the aim does (the camera swinging round used to turn the whole body)', () => {
@@ -31,5 +32,18 @@ describe('scooter riders stay on the bike', () => {
   it('a soldier on foot faces the aim', () => {
     expect(bodyFacing({ yaw: 2.3 })).toBe(2.3);
     expect(wrapAngle(bodyFacing({ yaw: -3 }) + 3)).toBe(0);
+  });
+});
+
+describe('enemy highlight', () => {
+  it('tints cloned materials red without changing the source material', () => {
+    const source = new THREE.MeshStandardMaterial({ color: 0x334455 });
+    const highlighted = enemyHighlightMaterial(source);
+
+    expect(tintEnemyFragmentShader('#include <color_fragment>')).toContain('mix(diffuseColor.rgb, vec3(1.0, 0.08, 0.08), 0.32)');
+    expect(highlighted).not.toBe(source);
+    expect((highlighted as THREE.MeshStandardMaterial).color.getHex()).toBe(source.color.getHex());
+    highlighted.dispose();
+    source.dispose();
   });
 });
