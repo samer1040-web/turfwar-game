@@ -1,9 +1,11 @@
 import type { Input } from '../game/input';
+import { GyroAim } from '../game/gyro';
 import type { ActionId } from '../game/keybinds';
 import { type HoldAim } from '../game/holdfire';
 import {
   CONTROLS, controlAction, placeOf, stickActions, stickShown, STICK, TOUCH_LOOK_SCALE, touchSensitivity, type ControlId, type ControlKind, type PlaceId, type TouchContext, type TouchLayout, visibleControls, touchLayout,
 } from '../game/touchlayout';
+import { onLang, t } from './i18n';
 import { toView, viewRect } from './viewport';
 
 export interface TouchInfo {
@@ -13,7 +15,7 @@ export interface TouchInfo {
   smokes: number;
   molotovs: number;
   bobas: number;
-  use?: 'vehicle' | 'crate' | 'arm' | 'disarm';
+  use?: 'vehicle' | 'crate' | 'weapon' | 'arm' | 'disarm';
   storeHot: boolean;
   reloading: boolean;
   holdAim: HoldAim;
@@ -88,6 +90,26 @@ function buttonClass(extra = '') {
   return `tc-btn ${extra}`.trim();
 }
 
+interface TouchLookPoint { x: number; y: number }
+
+export function moveTouchLook(points: Map<number, TouchLookPoint>, pointer: number, x: number, y: number) {
+  const previous = points.get(pointer);
+  if (!previous) return undefined;
+  points.set(pointer, { x, y });
+  return { x: x - previous.x, y: y - previous.y };
+}
+
+export function holdTouchAction(input: Pick<Input, 'touchHeld' | 'touchPress'>, action: ActionId) {
+  input.touchHeld.set(action, 1);
+  if (action === 'use') input.touchPress(action);
+}
+
+export function toggleTouchAction(input: Pick<Input, 'touchHeld' | 'touchPress'>, action: ActionId) {
+  if (input.touchHeld.has(action)) input.touchHeld.delete(action);
+  else input.touchHeld.set(action, 1);
+  input.touchPress(action);
+}
+
 export function controlHtml(id: PlaceId, layout: TouchLayout, extra = ''): string {
   if (id === 'stick') {
     const p = placeOf(layout, id);
@@ -107,31 +129,56 @@ export class TouchControls {
   private readonly activeButtons = new Map<number, { id: ControlId; action: ActionId; kind: ControlKind }>();
   private readonly stickActions = new Set<ActionId>();
   private activeStick?: { pointer: number; x: number; y: number; radius: number };
-  private activeLook?: { pointer: number; x: number; y: number };
+  private activeLook = new Map<number, TouchLookPoint>();
   private context: TouchContext = { scope: 'none' };
+  private readonly gyro: GyroAim;
+  private readonly gyroButton = document.createElement('button');
+  private readonly stopLang: () => void;
 
   constructor(container: HTMLElement, private readonly input: Input, private readonly ui: { typeChat: (team: boolean) => void; say: (text: string, team: boolean) => void }) {
     this.root.className = 'touch-layer';
     this.root.setAttribute('aria-label', 'Touch controls');
     this.stick.className = 'tc-stick';
     this.stick.innerHTML = '<span class="ring"></span><span class="knob"></span>';
-    this.root.append(this.stick);
+    this.gyro = new GyroAim(input, state => this.updateGyroButton(state));
+    this.gyroButton.type = 'button';
+    this.gyroButton.className = 'tc-gyro';
+    this.gyroButton.hidden = !this.gyro.available;
+    this.gyroButton.addEventListener('pointerdown', e => e.stopPropagation(), { signal: this.stop.signal });
+    this.gyroButton.addEventListener('click', () => { void this.gyro.toggle(); }, { signal: this.stop.signal });
+    this.root.append(this.stick, this.gyroButton);
     container.appendChild(this.root);
     this.root.addEventListener('pointerdown', e => this.pointerDown(e), { signal: this.stop.signal });
     this.root.addEventListener('pointermove', e => this.pointerMove(e), { signal: this.stop.signal });
     this.root.addEventListener('pointerup', e => this.pointerUp(e), { signal: this.stop.signal });
     this.root.addEventListener('pointercancel', e => this.pointerUp(e), { signal: this.stop.signal });
     this.root.addEventListener('contextmenu', e => e.preventDefault(), { signal: this.stop.signal });
+    this.stopLang = onLang(() => this.updateGyroButton(this.gyro.enabled ? (this.gyro.starting ? 'starting' : 'on') : 'off'));
+    this.stop.signal.addEventListener('abort', this.stopLang, { once: true });
+    this.updateGyroButton('off');
     this.update({ scope: 'none' }, { slot: 0, weapons: ['', ''], grenades: 0, smokes: 0, molotovs: 0, bobas: 0, storeHot: false, reloading: false, holdAim: 'none', shots: 0 });
   }
 
   dispose() {
+    this.gyro.dispose();
     this.stop.abort();
     this.root.remove();
   }
 
+  private updateGyroButton(state: 'off' | 'on' | 'starting' | 'denied') {
+    this.gyroButton.hidden = !this.gyro.available;
+    this.gyroButton.textContent = t('tc.gyroShort');
+    const title = state === 'starting' ? t('tc.gyro.wait')
+      : state === 'denied' ? t('tc.gyroDenied')
+        : t(state === 'on' ? 'tc.gyro.on' : 'tc.gyro.off');
+    this.gyroButton.title = title;
+    this.gyroButton.setAttribute('aria-label', title);
+    this.gyroButton.dataset.error = state === 'denied' ? 'yes' : 'no';
+    this.gyroButton.classList.toggle('on', state === 'on' || state === 'starting');
+  }
+
   private idFor(target: EventTarget | null): PlaceId | undefined {
-    const el = target instanceof HTMLElement ? target.closest<HTMLElement>('[data-c]') : null;
+    const el = target instanceof Element ? target.closest<HTMLElement>('[data-c]') : null;
     return el?.dataset.c as PlaceId | undefined;
   }
 
@@ -160,26 +207,22 @@ export class TouchControls {
     e.preventDefault();
   }
 
-  private beginLook(e: PointerEvent) {
-    if (this.activeLook || !this.input.touch) return;
+  private beginLook(e: PointerEvent, fromButton = false) {
+    if (this.activeLook.has(e.pointerId) || !this.input.touch) return;
     const p = this.point(e);
-    if (p.x <= p.width * 0.5) return;
-    this.activeLook = { pointer: e.pointerId, x: p.x, y: p.y };
+    if (!fromButton && p.x <= p.width * 0.5) return;
+    this.activeLook.set(e.pointerId, { x: p.x, y: p.y });
     this.root.setPointerCapture(e.pointerId);
     e.preventDefault();
   }
 
   private moveLook(e: PointerEvent) {
-    const active = this.activeLook;
-    if (!active || active.pointer !== e.pointerId) return;
-    const p = this.point(e), dx = p.x - active.x, dy = p.y - active.y;
-    active.x = p.x;
-    active.y = p.y;
-    this.input.touchLook(dx, dy, TOUCH_LOOK_SCALE * touchSensitivity());
+    const p = this.point(e), delta = moveTouchLook(this.activeLook, e.pointerId, p.x, p.y);
+    if (delta) this.input.touchLook(delta.x, delta.y, TOUCH_LOOK_SCALE * touchSensitivity());
   }
 
   private endLook(pointer: number) {
-    if (this.activeLook?.pointer === pointer) this.activeLook = undefined;
+    this.activeLook.delete(pointer);
   }
 
   private moveStick(e: PointerEvent) {
@@ -214,6 +257,7 @@ export class TouchControls {
 
   private pointerDown(e: PointerEvent) {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target instanceof Element && e.target.closest('.tc-gyro')) return;
     const id = this.idFor(e.target);
     if (!id) {
       this.beginStick(e);
@@ -225,12 +269,16 @@ export class TouchControls {
       return;
     }
     const { action, kind } = controlAction(id, touchLayout());
-    this.input.touchPress(action);
-    if (kind === 'hold' || kind === 'toggle') this.input.touchHeld.set(action, 1);
+    if (kind === 'tap') this.input.touchPress(action);
+    else if (kind === 'toggle') toggleTouchAction(this.input, action);
+    else {
+      holdTouchAction(this.input, action);
+    }
     this.activeButtons.set(e.pointerId, { id, action, kind });
     this.root.setPointerCapture(e.pointerId);
     const el = this.buttons.get(id);
     if (el) el.classList.add('active');
+    if (action === 'fire') this.beginLook(e, true);
     e.preventDefault();
   }
 
@@ -243,7 +291,7 @@ export class TouchControls {
     const active = this.activeButtons.get(e.pointerId);
     if (active) {
       this.activeButtons.delete(e.pointerId);
-      if (active.kind !== 'tap' && ![...this.activeButtons.values()].some(button => button.action === active.action && button.kind !== 'tap')) this.unbind(active.action);
+      if (active.kind === 'hold' && ![...this.activeButtons.values()].some(button => button.action === active.action && button.kind === 'hold')) this.unbind(active.action);
       if (![...this.activeButtons.values()].some(button => button.id === active.id)) this.buttons.get(active.id)?.classList.remove('active');
     }
     this.endStick(e.pointerId);

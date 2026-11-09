@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultLayout } from '../game/touchlayout';
-import { controlHtml, holdTouchAction, moveTouchLook } from './touchcontrols';
+import type { ActionId } from '../game/keybinds';
+import { controlHtml, holdTouchAction, moveTouchLook, toggleTouchAction } from './touchcontrols';
 
 describe('touch control labels', () => {
   it('renders visible icon buttons instead of text-only controls', () => {
@@ -42,4 +43,15 @@ describe('touch use action', () => {
     expect(pressed.size).toBe(0);
   });
 
+  it('keeps toggle controls active until the next tap', () => {
+    const held = new Map<ActionId, number>();
+    const pressed = new Set<ActionId>();
+    const input = { touchHeld: held, touchPress: (action: ActionId) => { pressed.add(action); } };
+
+    toggleTouchAction(input, 'aim');
+    expect(held.get('aim')).toBe(1);
+    toggleTouchAction(input, 'aim');
+    expect(held.has('aim')).toBe(false);
+    expect(pressed.has('aim')).toBe(true);
+  });
 });
