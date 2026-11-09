@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAP_IDS, loadMap, loadNav } from '../maps/index';
+import { MAP_IDS, loadMap, loadNav, mapDef } from '../maps/index';
 import { rng } from '../math';
 import { CollisionWorld } from '../collision';
 import { createMoveState, eyeHeight, stepMovement } from '../movement';
@@ -10,12 +10,12 @@ import {
   BOMB_REACH, addSoldier, balanceTeams, buyAttachmentFor, buyItem, createContext, createMatch, drinkBoba, fireShot, reportState,
   canSwitchTeam, removeSoldier, resetMatch, startRound, switchTeam, switchWeapon, throwMolotov, throwSlipper, throwSmoke, tickMatch, useAmmoCrate, useWeaponPickup, LATE_JOIN_SECONDS, TICK_RATE,
 } from './sim';
-import { ATTACKERS, ELIMINATION, PRACTICE_CONFIG, SABOTAGE, type MatchConfig, type MatchEvent, type MatchState, type Soldier, type Team } from './state';
+import { ATTACKERS, ELIMINATION, normalizeMatchConfig, PRACTICE_CONFIG, SABOTAGE, type MatchConfig, type MatchEvent, type MatchState, type Soldier, type Team } from './state';
 import { MOVE_SLACK, feetOf, killSoldier, sideOf, smokeBlocks, type SimContext } from './combat';
 import { firePatches, inFire } from './fire';
 import { updateBot } from './bots';
 import { CASH } from './economy';
-import { decodeFrame, encodeFrame } from './frame';
+import { decodeFrame, encodeFrame, FRAME_HEADER } from './frame';
 
 function setup(config: MatchConfig = ELIMINATION, seed = 1, mapId = 'cinder') {
   const events: MatchEvent[] = [];
@@ -64,7 +64,11 @@ describe('maps and navigation', () => {
         expect(world.overlapsSolid({ x: p.x, y: p.y + 0.05, z: p.z }, 0.3, 1.2), `crate@${p.x},${p.z}`).toBe(false);
       }
       if (id === 'citadel') {
-        expect(def.weaponPickups).toHaveLength(5);
+        expect(def.weaponPickups).toHaveLength(19);
+        for (const spawn of mapDef('citadel').spawns) {
+          expect(def.weaponPickups!.some(p => p.weapon === 'm110' && Math.hypot(p.x - spawn.x, p.z - spawn.z) < 2))
+            .toBe(true);
+        }
         for (const pickup of def.weaponPickups ?? []) {
           expect(world.groundHeight(pickup.x, pickup.z, pickup.y + 0.1, 0.3)).toBeCloseTo(pickup.y, 1);
           for (const team of [0, 1] as const) {
@@ -194,6 +198,7 @@ describe('rounds', () => {
     expect(ELIMINATION.killsToWin).toBe(6);
     expect(SABOTAGE.killsToWin).toBe(6);
     expect(PRACTICE_CONFIG.killsToWin).toBeUndefined();
+    expect(normalizeMatchConfig({ ...ELIMINATION, killsToWin: 99 }).killsToWin).toBe(6);
   });
 
   it('does not end early when one team reaches four round wins', () => {
@@ -1074,6 +1079,7 @@ describe('frame', () => {
     tick(state, ctx, 6);
     state.bomb = { site: 0, armed: true, progress: 0.5, by: 7 };
     state.weaponPickups = [true, false, true, false, true];
+    state.weaponPickups[31] = false;
     state.bodies.push({ id: 999, kind: 'grenade', x: 1, y: 2, z: 3, vx: 30, vy: 1, vz: 0, age: 0, owner: 1, team: 0, hp: 1, timer: 2 });
     state.bodies.push({ id: 1000, kind: 'smoke', x: 1, y: 2, z: 3, vx: 3, vy: 1, vz: 0, age: 0, owner: 1, team: 0, hp: 1, timer: 1 });
     state.bodies.push({ id: 1002, kind: 'molotov', x: 1, y: 2, z: 3, vx: 3, vy: 1, vz: 0, age: 0, owner: 1, team: 0, hp: 1, timer: 1 });
@@ -1089,6 +1095,8 @@ describe('frame', () => {
     expect(frame.bomb.site).toBe(0); expect(frame.bomb.armed).toBe(true); expect(frame.bomb.by).toBe(7);
     expect(frame.bomb.progress).toBeCloseTo(0.5, 2);
     expect(frame.weaponPickups.slice(0, 5)).toEqual([true, false, true, false, true]);
+    expect(frame.weaponPickups).toHaveLength(32);
+    expect(frame.weaponPickups[31]).toBe(false);
     expect(frame.poses.length).toBe(12);
     const pose = frame.poses[3];
     expect(pose.id).toBe(a.id);
@@ -1104,6 +1112,19 @@ describe('frame', () => {
     expect(frame.shots[0].to.z).toBeCloseTo(-80.02, 1);
     const other = frame.poses[0], s0 = state.soldiers[0];
     expect(other.weaponId).toBe(s0.weapons[s0.weapon as 0 | 1]);
+  });
+
+  it('still decodes version 7 frames with their original eight pickup bits', () => {
+    const { state } = setup(ELIMINATION, 3);
+    state.weaponPickups = [true, false, true, false, true];
+    const current = encodeFrame(state, []);
+    const legacyHeader = FRAME_HEADER - 3;
+    const old = new Uint8Array(current.length - 3);
+    old.set(current.subarray(0, legacyHeader));
+    old.set(current.subarray(FRAME_HEADER), legacyHeader);
+    old[0] = 7;
+
+    expect(decodeFrame(old)?.weaponPickups).toEqual([true, false, true, false, true, false, false, false]);
   });
 });
 
@@ -1131,7 +1152,20 @@ describe('Citadel weapon pickups', () => {
     expect(state.weaponPickups[1]).toBe(true);
 
     startRound(state, ctx);
-    expect(state.weaponPickups).toEqual([true, true, true, true, true]);
+    expect(state.weaponPickups).toEqual(Array.from({ length: ctx.map.weaponPickups!.length }, () => true));
+  });
+
+  it('gives the M110 spawn pickup its 6x scope', () => {
+    const { ctx, state } = setup({ ...ELIMINATION, warmup: 0 }, 11, 'citadel');
+    const player = addSoldier(state, ctx, { name: 'Sniper', team: 0, bot: false });
+    goLive(state, ctx);
+    const index = ctx.map.weaponPickups!.findIndex(p => p.weapon === 'm110');
+    const pickup = ctx.map.weaponPickups![index];
+    player.m.x = pickup.x; player.m.y = pickup.y; player.m.z = pickup.z;
+
+    expect(useWeaponPickup(state, ctx, player.id, index)).toBe(true);
+    expect(player.attachments.m110?.optic).toBe('x6');
+    expect(weaponStats('m110', player.attachments.m110).zoom).toBeCloseTo(1 / 6);
   });
 });
 

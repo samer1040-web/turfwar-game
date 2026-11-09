@@ -10,7 +10,7 @@ import type { BombState, MatchEvent, MatchState, RoundPhase } from './state';
  * The server writes one frame row per tick, so a hundred soldiers cost one small row update per
  * client instead of hundreds of row updates. Positions are quantized to 2 cm, velocities to 1 cm/s.
  */
-export const FRAME_VERSION = 7;
+export const FRAME_VERSION = 8;
 
 const POS = 50;          // units per metre (2 cm)
 const VEL = 100;         // units per m/s
@@ -50,7 +50,9 @@ export interface DecodedFrame extends FrameClock {
 export type FrameVehicle = Pick<Vehicle, 'id' | 'kind' | 'x' | 'y' | 'z' | 'vx' | 'vy' | 'vz' | 'yaw' | 'pitch' | 'roll' | 'rotor' | 'grounded' | 'health' | 'driver' | 'passenger' | 'wrecked'>;
 
 /** Byte sizes of the header and of each record (shared/rec/ edits frames in place with them). */
-export const FRAME_HEADER = 1 + 4 + 4 * 2 + 1 + 2 + 1 + 1 + 1 + 2 + 2 + 2 + 2 + 1 + 1;
+const PICKUP_MASK_BYTES = 4;
+const LEGACY_FRAME_VERSION = 7;
+export const FRAME_HEADER = 1 + 4 + 4 * 2 + 1 + 2 + 1 + 1 + 1 + 2 + 2 + 2 + 2 + 1 + PICKUP_MASK_BYTES;
 export const FRAME_POSE = 23, FRAME_BODY = 16, FRAME_SHOT = 16, FRAME_VEHICLE = 27;
 const HEADER = FRAME_HEADER, POSE = FRAME_POSE, BODY = FRAME_BODY, SHOT = FRAME_SHOT, VEHICLE = FRAME_VEHICLE;
 const i16 = (v: number) => Math.max(-32768, Math.min(32767, Math.round(v)));
@@ -75,8 +77,8 @@ export function encodeFrame(state: MatchState, shots: Extract<MatchEvent, { type
   v.setUint16(o, bodies.length, true); o += 2;
   v.setUint16(o, sentShots.length, true); o += 2;
   v.setUint8(o, vehicles.length); o += 1;
-  const pickupMask = state.weaponPickups.slice(0, 8).reduce((mask, available, i) => mask | (available ? 1 << i : 0), 0);
-  v.setUint8(o, pickupMask); o += 1;
+  const pickupMask = state.weaponPickups.slice(0, 32).reduce((mask, available, i) => mask | (available ? 1 << i : 0), 0);
+  v.setUint32(o, pickupMask, true); o += PICKUP_MASK_BYTES;
   for (const s of soldiers) {
     const m = s.m;
     v.setUint16(o, s.id, true);
@@ -126,10 +128,11 @@ export function encodeFrame(state: MatchState, shots: Extract<MatchEvent, { type
 }
 
 export function decodeFrame(bytes: Uint8Array): DecodedFrame | undefined {
-  if (bytes.byteLength < HEADER) return undefined;
+  if (bytes.byteLength < FRAME_HEADER - PICKUP_MASK_BYTES + 1) return undefined;
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let o = 0;
-  if (v.getUint8(o) !== FRAME_VERSION) return undefined;
+  const version = v.getUint8(o);
+  if (version !== FRAME_VERSION && version !== LEGACY_FRAME_VERSION) return undefined;
   o += 1;
   const tick = v.getUint32(o, true); o += 4;
   const time = v.getFloat32(o, true), phaseLeft = v.getFloat32(o + 4, true); o += 8;
@@ -138,8 +141,10 @@ export function decodeFrame(bytes: Uint8Array): DecodedFrame | undefined {
   const bomb: BombState = { site: v.getInt8(o), armed: v.getUint8(o + 1) === 1, progress: v.getUint8(o + 2) / 255, by: v.getInt16(o + 3, true) }; o += 5;
   const soldierCount = v.getUint16(o, true), bodyCount = v.getUint16(o + 2, true), shotCount = v.getUint16(o + 4, true); o += 6;
   const vehicleCount = v.getUint8(o); o += 1;
-  const pickupMask = v.getUint8(o); o += 1;
-  if (bytes.byteLength < HEADER + soldierCount * POSE + bodyCount * BODY + vehicleCount * VEHICLE + shotCount * SHOT) return undefined;
+  const pickupMask = version === LEGACY_FRAME_VERSION ? v.getUint8(o) : v.getUint32(o, true);
+  o += version === LEGACY_FRAME_VERSION ? 1 : PICKUP_MASK_BYTES;
+  const header = version === LEGACY_FRAME_VERSION ? FRAME_HEADER - PICKUP_MASK_BYTES + 1 : HEADER;
+  if (bytes.byteLength < header + soldierCount * POSE + bodyCount * BODY + vehicleCount * VEHICLE + shotCount * SHOT) return undefined;
   const poses: FramePose[] = [];
   for (let i = 0; i < soldierCount; i++, o += POSE) {
     const flags = v.getUint8(o + 19);
@@ -183,6 +188,6 @@ export function decodeFrame(bytes: Uint8Array): DecodedFrame | undefined {
       to: { x: v.getInt16(o + 10, true) / POS, y: v.getInt16(o + 12, true) / POS, z: v.getInt16(o + 14, true) / POS },
     });
   }
-  const weaponPickups = Array.from({ length: 8 }, (_, i) => !!(pickupMask & (1 << i)));
+  const weaponPickups = Array.from({ length: version === LEGACY_FRAME_VERSION ? 8 : 32 }, (_, i) => !!(pickupMask & (1 << i)));
   return { tick, time, phaseLeft, round, roundPhase, bomb, poses, bodies, vehicles, shots, weaponPickups };
 }

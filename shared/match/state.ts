@@ -162,7 +162,8 @@ export interface MatchConfig {
 }
 
 /** Competitive matches end when a soldier reaches six kills; practice has no kill limit. */
-const COMPETITIVE = { killsToWin: 6, bombTime: 40, armTime: 5, disarmTime: 5, freezeTime: 4, roundOverTime: 5, matchOverTime: 10, buyTime: 20 };
+export const KILLS_TO_WIN = 6;
+const COMPETITIVE = { killsToWin: KILLS_TO_WIN, bombTime: 40, armTime: 5, disarmTime: 5, freezeTime: 4, roundOverTime: 5, matchOverTime: 10, buyTime: 20 };
 export const ELIMINATION: MatchConfig = { ...COMPETITIVE, mode: 'elimination', teamSize: 6, roundTime: 120, roundTimeSingle: 120, warmup: 3, botSkill: 0.45 };
 export const SABOTAGE: MatchConfig = { ...COMPETITIVE, mode: 'sabotage', teamSize: 6, roundTime: 90, roundTimeSingle: 120, warmup: 3, botSkill: 0.45 };
 export const OFFLINE_CONFIG = ELIMINATION;
@@ -172,8 +173,12 @@ export const ONLINE_CONFIG: MatchConfig = { ...ELIMINATION, warmup: 8, botSkill:
  * The server uses this target for Quick Play and Play Online. Private rooms and Solo use the same
  * six-kill limit through ELIMINATION and SABOTAGE.
  */
-export const PUBLIC_KILLS_TO_WIN = 6;
+export const PUBLIC_KILLS_TO_WIN = KILLS_TO_WIN;
 export const PRACTICE_CONFIG: MatchConfig = { ...ELIMINATION, teamSize: 0, killsToWin: undefined, roundTime: 3600, warmup: 1, botSkill: 0.4, practice: true, freeBuy: true };
+
+export function normalizeMatchConfig(config: MatchConfig): MatchConfig {
+  return config.practice ? config : { ...config, killsToWin: KILLS_TO_WIN };
+}
 
 export interface BombState {
   /** Index into the map's bomb sites being armed or armed (-1 = none). */

@@ -10,7 +10,7 @@ import {
   reportVehicle, resetMatch, switchWeapon, throwGrenade, tickMatch, useAmmoCrate, useWeaponPickup as applyWeaponPickup, TICK_RATE,
 } from '../../shared/match/sim';
 import {
-  AFK, ONLINE_CONFIG, PUBLIC_KILLS_TO_WIN, noteAction, type BombState, type BotBrain, type MatchConfig, type MatchEvent, type MatchState, type RoundStats, type Soldier, type Team,
+  AFK, ONLINE_CONFIG, PUBLIC_KILLS_TO_WIN, normalizeMatchConfig, noteAction, type BombState, type BotBrain, type MatchConfig, type MatchEvent, type MatchState, type RoundStats, type Soldier, type Team,
 } from '../../shared/match/state';
 import { ATTACHMENTS, DEFAULT_WEAPONS, STAMINA, WEAPONS, normalizeAttachments, type AttachmentId, type Attachments, type Slot, type WeaponId } from '../../shared/weapons';
 import { newRoundStats, type BuyItem } from '../../shared/match/economy';
@@ -540,7 +540,7 @@ function load(ctx: Ctx, room: number): Loaded {
     mapId: row.mapId, phase: legacy ? 'warmup' : row.phase as MatchState['phase'], phaseLeft: legacy ? ONLINE_CONFIG.warmup : clock.phaseLeft,
     time: clock.time, tick: clock.tick,
     scores: legacy ? [0, 0] : [row.score0, row.score1], soldiers, bodies, vehicles, nextId: clock.nextId,
-    winner: legacy ? -1 : row.winner as -1 | Team, config: legacy ? { ...ONLINE_CONFIG } : { ...ONLINE_CONFIG, ...JSON.parse(row.configJson) },
+    winner: legacy ? -1 : row.winner as -1 | Team, config: normalizeMatchConfig(legacy ? { ...ONLINE_CONFIG } : { ...ONLINE_CONFIG, ...JSON.parse(row.configJson) }),
     round: round.round ?? 0, roundPhase: round.roundPhase ?? 'freeze', roundClock: round.roundClock ?? 0, roundWinner: round.roundWinner ?? -1,
     lossStreak: round.lossStreak ?? [0, 0],
     lastKillTeam: round.lastKillTeam ?? -1, bomb: round.bomb ?? { site: -1, armed: false, progress: 0, by: -1 },
@@ -782,7 +782,7 @@ function hideCode(ctx: Ctx, row: MatchRow) {
 }
 
 const humansIn = (ctx: Ctx, room: number) => { let n = 0; for (const r of ctx.db.soldier.iter()) if (r.room === room && !r.bot) n++; return n; };
-const configOf = (row: MatchRow): MatchConfig => ({ ...ONLINE_CONFIG, ...JSON.parse(row.configJson) });
+const configOf = (row: MatchRow): MatchConfig => normalizeMatchConfig({ ...ONLINE_CONFIG, ...JSON.parse(row.configJson) });
 
 /** Take a player out of their room (crediting their play time); an emptied room closes. */
 function leaveRoom(ctx: Ctx, player: { identity: Identity; soldierId: number; room: number }) {

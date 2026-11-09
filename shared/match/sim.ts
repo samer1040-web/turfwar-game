@@ -292,6 +292,7 @@ export function useWeaponPickup(state: MatchState, ctx: SimContext, id: number, 
     || seatOf(state, id) || !state.weaponPickups[index] || Math.abs(s.m.y - pickup.y) > 1.6
     || Math.hypot(s.m.x - pickup.x, s.m.z - pickup.z) > WEAPON_PICKUP_REACH) return false;
   state.weaponPickups[index] = false;
+  if (pickup.weapon === 'm110') s.attachments.m110 = { ...s.attachments.m110, optic: 'x6' };
   s.weapons[0] = pickup.weapon;
   if (!s.owned.includes(pickup.weapon)) s.owned.push(pickup.weapon);
   const stats = weaponStats(pickup.weapon, s.attachments[pickup.weapon]);

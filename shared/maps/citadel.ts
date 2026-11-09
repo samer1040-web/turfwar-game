@@ -152,7 +152,10 @@ export function citadelKeep(): MapDef {
     b.box(SX, sy - 0.5, -10, 12, 5, 1.2, 'sandstone');
     b.box(SX, sy - 0.5, 10, 12, 5, 1.2, 'sandstone');
     b.box(SX + 5.8, sy, 0, 0.3, 6, 18.8, 'shield', 'energy', b.team(0));
-    for (const [x, z] of [[-3, -7], [-3, -3.5], [-3, 0], [-3, 3.5], [-3, 7], [1, -5], [1, 5]]) b.spawn(0, SX + x, sy, z, -Math.PI / 2);
+    for (const [x, z] of [[-3, -7], [-3, -3.5], [-3, 0], [-3, 3.5], [-3, 7], [1, -5], [1, 5]]) {
+      b.spawn(0, SX + x, sy, z, -Math.PI / 2);
+      b.weaponPickup('m110', SX + x + 1.25, sy, z);
+    }
     b.raw({ kind: 'spawnPad', team: b.team(0), ...b.at(SX - 1, 0), y: sy, rotY: b.rotation(-Math.PI / 2) });
     b.light(SX - 2, sy + 4.5, 0, b.mirroredSide ? 0xff5a4a : 0x58b6ff, 8, 20);
     // Cover between the camp and the barbican.
