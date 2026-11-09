@@ -26,7 +26,8 @@ export type { SimContext } from './combat';
 
 /** Metres from a bomb site's centre within which it can be armed or disarmed. */
 export const BOMB_REACH = 3.5;
-export const WEAPON_PICKUP_REACH = 2.4;
+export const WEAPON_PICKUP_REACH = 3.25;
+export const WEAPON_PICKUP_HEIGHT_REACH = 2.2;
 
 /** Build a simulation context. `withNav` is needed only where bots are simulated. */
 export function createContext(mapId: string, random: () => number, emit: (e: MatchEvent) => void, withNav = true): SimContext {
@@ -289,7 +290,7 @@ export function useWeaponPickup(state: MatchState, ctx: SimContext, id: number, 
   const s = state.soldiers.find(x => x.id === id);
   const pickup = ctx.map.weaponPickups?.[index];
   if (!s || !pickup || !Number.isInteger(index) || !s.alive || state.phase === 'ended' || state.roundPhase === 'over'
-    || seatOf(state, id) || !state.weaponPickups[index] || Math.abs(s.m.y - pickup.y) > 1.6
+    || seatOf(state, id) || !state.weaponPickups[index] || Math.abs(s.m.y - pickup.y) > WEAPON_PICKUP_HEIGHT_REACH
     || Math.hypot(s.m.x - pickup.x, s.m.z - pickup.z) > WEAPON_PICKUP_REACH) return false;
   state.weaponPickups[index] = false;
   if (pickup.weapon === 'm110') s.attachments.m110 = { ...s.attachments.m110, optic: 'x6' };

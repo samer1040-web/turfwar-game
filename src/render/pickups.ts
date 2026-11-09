@@ -5,6 +5,7 @@ import { modelBox, weaponModel, type Assets } from '../assets';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { UI_STACK } from '../ui/fonts';
 import { mergeStatic, staticMeshes } from './batch';
+import { WEAPON_PICKUP_HEIGHT_REACH } from '../../shared/match/sim';
 
 /** Stencilled side of the ammo box (yellow military lettering on transparent). */
 function stencil(lines: [string, number][], w = 256, h = 128) {
@@ -186,7 +187,7 @@ export class WeaponPickupsView {
     let best = -1, bestD = reach;
     for (const pickup of this.pickups) {
       const { def, index } = pickup;
-      if (available[index] === false || Math.abs(def.y - y) > 1.6) continue;
+      if (available[index] === false || Math.abs(def.y - y) > WEAPON_PICKUP_HEIGHT_REACH) continue;
       const d = Math.hypot(def.x - x, def.z - z);
       if (d < bestD) { bestD = d; best = index; }
     }

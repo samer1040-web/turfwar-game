@@ -1173,6 +1173,22 @@ describe('Citadel weapon pickups', () => {
     expect(weaponStats('m110', player.attachments.m110).zoom).toBeCloseTo(1 / 6);
   });
 
+  it('lets the player collect every fixed Citadel weapon from the interaction radius', () => {
+    const { ctx, state } = setup({ ...ELIMINATION, warmup: 0 }, 17, 'citadel');
+    const player = addSoldier(state, ctx, { name: 'Collector', team: 0, bot: false });
+    goLive(state, ctx);
+
+    for (const [index, pickup] of ctx.map.weaponPickups!.entries()) {
+      player.m.x = pickup.x + 2.8;
+      player.m.y = pickup.y + 2;
+      player.m.z = pickup.z;
+
+      expect(useWeaponPickup(state, ctx, player.id, index), pickup.weapon).toBe(true);
+      expect(player.weapons[0]).toBe(pickup.weapon);
+      expect(state.weaponPickups[index]).toBe(false);
+    }
+  });
+
   it('lets each team reach the single M110 placed outside its spawn shield', () => {
     const { ctx } = setup({ ...ELIMINATION, warmup: 0 }, 13, 'citadel');
     const snipers = ctx.map.weaponPickups!.filter(p => p.weapon === 'm110');
