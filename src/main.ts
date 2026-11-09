@@ -1996,13 +1996,12 @@ async function boot() {
             
             document.body.appendChild(winOverlay);
             
-            document.getElementById('win-close')!.addEventListener('click', () => {
+                        document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              if ((window as any).Telegram?.WebApp) {
-                  (window as any).Telegram.WebApp.close();
-              } else {
-                  window.location.href = 'https://t.me/LootEarnGames_bot';
-              }
+              window.close(); // يغلق نافذة اللعبة ويعيدك لتليجرام
+              setTimeout(() => {
+                window.location.href = 'https://t.me/LootEarnGames_bot';
+              }, 300);
             });
             
             return;
