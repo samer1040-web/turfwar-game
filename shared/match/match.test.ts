@@ -67,7 +67,8 @@ describe('maps and navigation', () => {
         const snipers = def.weaponPickups!.filter(p => p.weapon === 'm110');
         expect(def.weaponPickups).toHaveLength(6);
         expect(snipers).toHaveLength(2);
-        expect(snipers.map(p => p.x).sort((a, b) => a - b)).toEqual([-55.2, 55.2]);
+        expect(def.weaponPickups!.slice(0, 4).map(p => p.weapon)).toEqual(['m4a1', 'm1014', 'm249', 'mp7']);
+        expect(snipers.map(p => p.x).sort((a, b) => a - b)).toEqual([-52, 52]);
         expect(snipers.every(p => Math.abs(p.z) < 0.1)).toBe(true);
         for (const pickup of snipers) {
           expect(Math.min(...mapDef('citadel').spawns.map(s => Math.hypot(s.x - pickup.x, s.z - pickup.z))))
