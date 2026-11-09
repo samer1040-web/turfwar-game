@@ -8,7 +8,7 @@ import { BOBA, GRENADE, HEALTH, MOLOTOV, SLIPPER, SMOKE, WEAPONS, pelletCone, pe
 import { findPath, nearestNode } from './nav';
 import {
   BOMB_REACH, addSoldier, balanceTeams, buyAttachmentFor, buyItem, createContext, createMatch, drinkBoba, fireShot, reportState,
-  canSwitchTeam, removeSoldier, resetMatch, startRound, switchTeam, switchWeapon, throwMolotov, throwSlipper, throwSmoke, tickMatch, useAmmoCrate, useWeaponPickup, LATE_JOIN_SECONDS, TICK_RATE,
+  canSwitchTeam, removeSoldier, resetMatch, startRound, switchTeam, switchWeapon, throwMolotov, throwSlipper, throwSmoke, tickMatch, useAmmoCrate, useWeaponPickup, LATE_JOIN_SECONDS, TICK_RATE, WEAPON_PICKUP_REACH,
 } from './sim';
 import { ATTACKERS, ELIMINATION, normalizeMatchConfig, PRACTICE_CONFIG, SABOTAGE, type MatchConfig, type MatchEvent, type MatchState, type Soldier, type Team } from './state';
 import { MOVE_SLACK, feetOf, killSoldier, sideOf, smokeBlocks, type SimContext } from './combat';
@@ -64,10 +64,15 @@ describe('maps and navigation', () => {
         expect(world.overlapsSolid({ x: p.x, y: p.y + 0.05, z: p.z }, 0.3, 1.2), `crate@${p.x},${p.z}`).toBe(false);
       }
       if (id === 'citadel') {
-        expect(def.weaponPickups).toHaveLength(19);
-        for (const spawn of mapDef('citadel').spawns) {
-          expect(def.weaponPickups!.some(p => p.weapon === 'm110' && Math.hypot(p.x - spawn.x, p.z - spawn.z) < 2))
-            .toBe(true);
+        const snipers = def.weaponPickups!.filter(p => p.weapon === 'm110');
+        expect(def.weaponPickups).toHaveLength(6);
+        expect(snipers).toHaveLength(2);
+        expect(snipers.map(p => p.x).sort((a, b) => a - b)).toEqual([-55.2, 55.2]);
+        expect(snipers.every(p => Math.abs(p.z) < 0.1)).toBe(true);
+        for (const pickup of snipers) {
+          expect(Math.min(...mapDef('citadel').spawns.map(s => Math.hypot(s.x - pickup.x, s.z - pickup.z))))
+            .toBeGreaterThan(WEAPON_PICKUP_REACH);
+          expect(world.overlapsSolid({ x: pickup.x, y: pickup.y, z: pickup.z }, 0.2, 1.2)).toBe(false);
         }
         for (const pickup of def.weaponPickups ?? []) {
           expect(world.groundHeight(pickup.x, pickup.z, pickup.y + 0.1, 0.3)).toBeCloseTo(pickup.y, 1);
@@ -1159,13 +1164,25 @@ describe('Citadel weapon pickups', () => {
     const { ctx, state } = setup({ ...ELIMINATION, warmup: 0 }, 11, 'citadel');
     const player = addSoldier(state, ctx, { name: 'Sniper', team: 0, bot: false });
     goLive(state, ctx);
-    const index = ctx.map.weaponPickups!.findIndex(p => p.weapon === 'm110');
+    const index = ctx.map.weaponPickups!.findIndex(p => p.weapon === 'm110' && p.x < 0);
     const pickup = ctx.map.weaponPickups![index];
     player.m.x = pickup.x; player.m.y = pickup.y; player.m.z = pickup.z;
 
     expect(useWeaponPickup(state, ctx, player.id, index)).toBe(true);
     expect(player.attachments.m110?.optic).toBe('x6');
     expect(weaponStats('m110', player.attachments.m110).zoom).toBeCloseTo(1 / 6);
+  });
+
+  it('lets each team reach the single M110 placed outside its spawn shield', () => {
+    const { ctx } = setup({ ...ELIMINATION, warmup: 0 }, 13, 'citadel');
+    const snipers = ctx.map.weaponPickups!.filter(p => p.weapon === 'm110');
+    expect(snipers).toHaveLength(2);
+    for (const pickup of snipers) {
+      const team = pickup.x < 0 ? 0 : 1;
+      const spawn = ctx.map.spawns.find(s => s.team === team)!;
+      const path = findPath(loadNav('citadel'), nearestNode(loadNav('citadel'), spawn.x, spawn.y, spawn.z), nearestNode(loadNav('citadel'), pickup.x, pickup.y, pickup.z));
+      expect(path.length).toBeGreaterThan(0);
+    }
   });
 });
 
