@@ -338,7 +338,6 @@ export class Game {
     }
     const sabotage = modeOf(state, this.map.def) === 'sabotage';
     
-    // ✅ تم إصلاح هذا السطر ليدعم اللمس
     const active = (this.input.locked || this.input.touch) && !this.buymenu.open && !this.hud.chatting;
     
     const released = !this.input.locked && !this.input.touch && !this.buymenu.open && !this.hud.chatting && state.phase !== 'ended';
@@ -364,7 +363,13 @@ export class Game {
       const chat = this.input.take('chat') ? false : this.input.take('teamChat') ? true : undefined;
       if (chat !== undefined && !chatDisabled()) { this.input.clear(); this.hud.openChat(chat, text => this.link.say(text, chat)); }
       const usePressed = this.seated ? this.input.take('exitVehicle') : this.input.take('use');
+      
+      // --- بداية التصحيح: التحقق من وجود الاتصال (link) ---
       if (usePressed && me?.alive) {
+        if (!link) {
+          console.warn("تم تجاهل طلب الالتقاط: الاتصال بالسيرفر مفقود.");
+          return;
+        }
         const i = this.crates.nearest(this.player.m.x, this.player.m.y, this.player.m.z, CRATE_REACH);
         const weaponPickup = this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups);
         if (this.seated) { link.exitVehicle(); this.audio.door(); }
@@ -376,6 +381,8 @@ export class Game {
           this.weaponPickupRetry = { index: weaponPickup, at: now + 300, until: now + 2000 };
         }
       }
+      // --- نهاية التصحيح ---
+
       const pendingPickup = this.weaponPickupRetry;
       if (pendingPickup) {
         const now = performance.now();
@@ -385,8 +392,10 @@ export class Game {
           || state.weaponPickups[pendingPickup.index] === false || weaponPickup !== pendingPickup.index
           || this.nearVehicle >= 0 || crate >= 0 || (myJob && site >= 0) || now >= pendingPickup.until) this.weaponPickupRetry = undefined;
         else if (now >= pendingPickup.at) {
-          link.useWeaponPickup(pendingPickup.index);
-          pendingPickup.at = now + 300;
+          if (link) {
+            link.useWeaponPickup(pendingPickup.index);
+            pendingPickup.at = now + 300;
+          }
         }
       }
     }
@@ -647,8 +656,6 @@ export class Game {
 
   private touchFrame(state: MatchState, me: Soldier | undefined, site: number, myJob: boolean, buyWindow: boolean) {
     const p = this.player, live = state.roundPhase === 'live';
-    
-    // ✅ تم إصلاح هذا السطر ليدعم اللمس
     const playing = !!me && (this.input.locked || this.input.touch) && !this.buymenu.open && !this.hud.chatting && !this.menu.open && state.phase !== 'ended';
     
     let ctx: TouchContext = { scope: 'none' };
