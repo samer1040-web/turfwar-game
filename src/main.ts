@@ -72,7 +72,8 @@ const modeOf = (a: Action) => a === 'solo' ? 'offline' : a === 'range' ? 'lab' :
 
 const menu = document.createElement('div');
 menu.id = 'menu';
-const maps = mapSummaries();
+
+const maps = mapSummaries().filter(m => m.id === 'citadel');
 const mapName = (id: string) => localMapName(id, maps.find(m => m.id === id)?.name ?? id);
 
 followLink(linkServer(crazyLinkPlace() ?? location));
@@ -219,7 +220,7 @@ app.appendChild(menu);
 
 const waitOverlay = document.createElement('div');
 waitOverlay.id = 'lobby-wait-overlay';
-waitOverlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;padding-top:40px;padding-bottom:120px;font-family:sans-serif;text-align:center;color:#fff;overflow-y:auto;';
+waitOverlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;padding:20px;';
 waitOverlay.innerHTML = `
     <h2 style="color:#14b8a6;font-size:28px;margin-bottom:20px;">جاري البحث عن خصم<br><span style="font-size:20px;">(Searching for opponent...)</span></h2>
     <div style="width:60px;height:60px;border:6px solid rgba(20,184,166,0.3);border-top-color:#14b8a6;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:40px;"></div>
@@ -230,7 +231,7 @@ document.body.appendChild(waitOverlay);
 
 const privateOverlay = document.createElement('div');
 privateOverlay.id = 'lobby-private-overlay';
-privateOverlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;padding-top:40px;padding-bottom:120px;font-family:sans-serif;color:#fff;overflow-y:auto;';
+privateOverlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:99999;display:none;flex-direction:column;align-items:center;padding:20px;font-family:sans-serif;color:#fff;';
 privateOverlay.innerHTML = `
     <div style="width:100%;max-width:600px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <div style="background:#1e293b;color:#14b8a6;padding:8px 16px;border-radius:20px;border:1px solid #14b8a6;font-size:16px;font-weight:bold;">Code: <span id="p-top-code">----</span></div>
@@ -245,13 +246,14 @@ privateOverlay.innerHTML = `
         <div style="margin: 20px 0;"><svg viewBox="0 0 24 24" width="48" height="48" stroke="#14b8a6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></div>
         <div style="color:#14b8a6;font-size:20px;margin-bottom:15px;">جاري البحث عن خصم حقيقي...</div>
         <div style="background:#0f172a;border:1px solid #14b8a6;border-radius:10px;padding:15px 40px;font-size:36px;letter-spacing:6px;color:#fff;margin-bottom:10px;" id="p-center-code">----</div>
-                <!-- زر إرسال الكود (بدلاً من كلمة كود الغرفة) -->
-                <button id="btn-share-code" style="background:#14b8a6; color:#fff; border:none; padding:12px 30px; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom: 20px; width: 100%; max-width: 250px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        <div style="color:#94a3b8;font-size:14px;margin-bottom:20px;">كود الغرفة</div>
+
+        <!-- زر إرسال الكود -->
+        <button id="btn-share-code" style="background:#14b8a6; color:#fff; border:none; padding:10px 25px; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer; display:flex; align-items:center; gap:8px;">
             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             إرسال الكود للدردشة
         </button>
-        <!-- زر إرسال الكود -->
-        
+
         <!-- نافذة الدردشة المصغرة (مخفية افتراضياً) -->
         <div id="game-chat-popup" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:#1e293b; border-radius:20px; z-index:10; flex-direction:column;">
             <div style="display:flex; justify-content:space-between; padding:15px; border-bottom:1px solid #334155; background:#0f172a; border-radius:20px 20px 0 0;">
@@ -887,22 +889,13 @@ function quickPressed() {
   else if (waitingLink === 'challenge') acceptChallenge();
   else {
     if (!online.ok || !ready || starting) return;
-    size = params.get('size') === '6' ? 'squad' : 'duel';
+    size = 'duel';
     map = 'citadel';
     mode = 'elimination';
     isPublic = true;
 
-    privateOverlay.style.display = 'flex';
-    loadHilltopAd();
+    waitOverlay.style.display = 'flex';
     let tries = 0;
-        // إخفاء الكود وإظهار شاشة البحث
-    const codeBox = document.getElementById('p-center-code');
-    const codeLabel = codeBox?.nextElementSibling;
-    const shareBtn = document.getElementById('btn-share-code');
-    
-    if (codeBox) codeBox.style.display = 'none';
-    if (codeLabel) (codeLabel as HTMLElement).style.display = 'none';
-    if (shareBtn) shareBtn.style.display = 'none';
     const checkRoom = setInterval(() => {
         const open = rooms.find(r =>
             !r.private && !roomFull(r) && r.size === 1 &&
@@ -910,21 +903,21 @@ function quickPressed() {
 
         if (open) {
             clearInterval(checkRoom);
-            privateOverlay.style.display = 'none';
+            waitOverlay.style.display = 'none';
             run('room', open.room); 
         } else {
             tries++;
             if (tries >= 4) {
                 clearInterval(checkRoom);
-                privateOverlay.style.display = 'none';
+                waitOverlay.style.display = 'none';
                 run('quick'); 
             }
         }
     }, 1000);
 
-    document.getElementById('p-cancel')!.onclick = () => {
+    document.getElementById('wait-cancel')!.onclick = () => {
         clearInterval(checkRoom);
-        privateOverlay.style.display = 'none';
+        waitOverlay.style.display = 'none';
     };
   }
 }
@@ -1366,13 +1359,6 @@ function offlineRules(): { mapId: string; mode: Mode } {
 }
 
 function fullscreenForTouch() {
-  // 👇 إجبار الشاشة على التوسع في تليجرام 👇
-  if ((window as any).Telegram?.WebApp) {
-      (window as any).Telegram.WebApp.expand();
-      if ((window as any).Telegram.WebApp.requestFullscreen) {
-          (window as any).Telegram.WebApp.requestFullscreen();
-      }
-  }
   if (CRAZYGAMES || !touchActive() || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
   void document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(() => {
     const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
@@ -1423,12 +1409,12 @@ async function start(action: Action, retried = false) {
   const rules = offlineRules();
   
   const how: OnlineEntry = duel?.kind === 'host' ? { kind: 'start', size: 1, mode: 'elimination', mapId: duel.mapId, bots: false, isPublic: false }
-    : duel?.kind === 'invite' ? { kind: 'start', size: duel.size ?? 6, mode: duel.mode, mapId: duel.mapId, bots: true, isPublic: false }
+    : duel?.kind === 'invite' ? { kind: 'start', size: duel.size ?? 6, mode: duel.mode, mapId: duel.mapId, bots: false, isPublic: false }
     : duel?.kind === 'join' ? { kind: 'code', code: duel.c.room! }
     : action === 'code' ? { kind: 'code', code: cleanCode(roomCode.value) }
     : action === 'room' ? { kind: 'room', room: joiningRoom }
     : action === 'start' ? { kind: 'start', size: perTeam(), mode, mapId: map, bots: false, isPublic }
-    :          { kind: 'start', size: params.get('size') === '6' ? 6 : 1, mode: 'elimination', mapId: params.get('size') === '6' ? 'citadel' : map, bots: true, isPublic: true };
+    : { kind: 'start', size: 1, mode: 'elimination', mapId: map, bots: false, isPublic: true };
   
   let link: GameLink;
   try {
@@ -1512,18 +1498,10 @@ async function start(action: Action, retried = false) {
       } else {
           waitOverlay.style.display = 'flex';
       }
-const waitStart = Date.now();
+
       const checkInterval = setInterval(async () => {
           const state = link.state();
-          // 👇 التعديل هنا: كسر الانتظار بعد 15 ثانية لـ 1v1 و 12 ثانية لـ 6v6 👇
-                    // 👇 التعديل: 20 ثانية لإنشاء الغرفة (الكود)، والبقاء على الوضع القديم للعب السريع 👇
-          const is1v1 = params.get('size') !== '6';
-          const isCreate = params.get('autostart') === 'create';
-          const waitTimeout = isCreate ? 20000 : (is1v1 ? 15000 : 12000);
-          
-          
-          
-          if ((state && state.soldiers.filter(s => !s.bot).length > 1) || (Date.now() - waitStart >= waitTimeout)) {
+          if (state && state.soldiers.filter(s => !s.bot).length > 1) {
               clearInterval(checkInterval);
               waitOverlay.style.display = 'none';
               privateOverlay.style.display = 'none';
@@ -1532,7 +1510,7 @@ const waitStart = Date.now();
                   status.textContent = loadingText();
                   try { assets = await assetsLoad!; } catch (e) { link.dispose(); starting = undefined; return; }
               }
-              const linkMap = state?.mapId ?? map;
+              const linkMap = state.mapId;
               await assets.textures.load(groundSets(THEMES[loadMap(linkMap).def.theme]));
               starting = undefined; joiningRoom = -1;
               status.textContent = '';
@@ -1584,7 +1562,6 @@ const waitStart = Date.now();
   game?.capture();
 }
 function launch(link: GameLink, map: string) {
-  matchStartTime = Date.now(); // 👈 تسجيل وقت بدء المباراة
   game = new Game(assets, renderer, link, map, audio, app);
   if (link.mode === 'online') game.server = matchServer;
   if (!benchMode) game.onDuel(online.ok ? openDuelRoom : undefined);
@@ -1625,7 +1602,6 @@ function reportRoom(link: GameLink, server: ServerId | undefined) {
 let matchServer: ServerId | undefined;
 let opponentLeftTimer: ReturnType<typeof setInterval> | undefined;
 let opponentLeftHandled = false;
-let matchStartTime = 0; // 👈 متغير جديد لمعرفة وقت بدء المباراة
 
 function playContext() {
   const app = inAppBrowserName(readEnv());
@@ -1808,28 +1784,6 @@ function crazyReady() {
   });
   if (crazyInstantMultiplayer() && !challenge && !invite) openInviteRoom();
 }
-function loadHilltopAd() {
-    const oldScript = document.getElementById('hilltop-ad-script');
-    if (oldScript) {
-        oldScript.remove();
-    }
-
-    const adScript = document.createElement('script');
-    adScript.id = 'hilltop-ad-script';
-    adScript.innerHTML = `
-        (function(xyo){
-        var d = document,
-            s = d.createElement('script'),
-            l = d.currentScript || d.scripts[d.scripts.length - 1];
-        s.settings = xyo || {};
-        s.src = "\\/\\/juvenilechoice.com\\/b-X.VZsQd\\/GelY0\\/YbWycr\\/EevmC9\\/uqZIUWlvklPQTvcP1POWDmIg4mMOjxkEtlNUzzUw4\\/MojCgGz\\/M\\/w_";
-        s.async = true;
-        s.referrerPolicy = 'no-referrer-when-downgrade';
-        l.parentNode.insertBefore(s, l);
-        })({})
-    `;
-    document.body.appendChild(adScript);
-}
 async function boot() {
   renderer = new Renderer(app, QUALITY[quality]);
   watchClientErrors(renderer.renderer.domElement, () => !!game, graphicsLost, graphicsRestored, () => {
@@ -1907,14 +1861,17 @@ async function boot() {
         const myId = game.link.myId();
         const me = state?.soldiers.find(s => s.id === myId);
         
-        if (state && me && !opponentLeftHandled) {
+        if (state && me && !opponentLeftHandled && state.config.teamSize === 1) {
+          const humanCount = state.soldiers.filter(s => !s.bot).length;
+          
+          // حساب الجولات (النقاط)
           const myScore = state.scores[me.team] || 0;
           const oppScore = state.scores[1 - me.team] || 0;
           const totalRounds = myScore + oppScore;
           
-          const isMatchOver = state.phase === 'ended';
-          const timeSinceStart = Date.now() - matchStartTime;
-          const opponentLeft = state.soldiers.length === 1 && timeSinceStart > 10000;
+          // نهاية المباراة إذا وصلت الجولات 6 أو خرج الخصم
+          const isMatchOver = totalRounds >= 6 || state.phase === 'ended';
+          const opponentLeft = humanCount === 1;
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
@@ -1927,17 +1884,10 @@ async function boot() {
             let color = "";
 
             if (opponentLeft && !isMatchOver) {
-                if (totalRounds >= 3) {
-                    isWin = true;
-                    title = "Congratulations, you won! 🏆";
-                    msg = "Your opponent left the game.";
-                    color = "#f59e0b";
-                } else {
-                    isDraw = true;
-                    title = "Match Abandoned 🏳️";
-                    msg = "Opponent left too early. No points awarded.";
-                    color = "#cbd5e1";
-                }
+                isWin = true;
+                title = "Congratulations, you won! 🏆";
+                msg = "Your opponent left the game.";
+                color = "#f59e0b";
             } else if (myScore > oppScore) {
                 isWin = true;
                 title = "Congratulations, you won! 🏆";
@@ -1955,6 +1905,7 @@ async function boot() {
                 color = "#cbd5e1";
             }
 
+            // إرسال النتيجة للسيرفر
             const urlParams = new URLSearchParams(window.location.search);
             const roomCodeParam = urlParams.get('room');
             const userEmailParam = urlParams.get('email');
@@ -1963,6 +1914,7 @@ async function boot() {
 
             if (isWin && userEmailParam) {
                 if (isTelegramPlatform) {
+                    // 👇 حالة تليجرام: إضافة 3 نقاط 👇
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
                         method: 'POST',
                         headers: {
@@ -1973,6 +1925,7 @@ async function boot() {
                         body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
                     }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
                 } else if (actualRoomCode) {
+                    // 👇 حالة الموقع (الغرف) 👇
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
                         method: 'POST',
                         headers: {
@@ -1983,25 +1936,42 @@ async function boot() {
                         body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: userEmailParam })
                     }).then(res => res.json()).then(data => console.log("Room points added:", data)).catch(err => console.error(err));
                 }
+            } else if (isDraw && userEmailParam) {
+                if (!isTelegramPlatform && actualRoomCode) {
+                    // 👇 حالة التعادل في الموقع 👇
+                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/cancel_3d_match', { 
+                        method: 'POST',
+                        headers: {
+                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA', 
+                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ p_room_code: actualRoomCode })
+                    }).then(res => res.json()).then(data => console.log("Draw points returned:", data)).catch(err => console.error(err));
+                }
             }
 
-            const winOverlay = document.createElement('div');
-            winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
-            
-            winOverlay.innerHTML = `
-              <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
-              <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
-              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للبوت</button>
-            `;
-            
-            document.body.appendChild(winOverlay);
-            
-            document.getElementById('win-close')!.addEventListener('click', () => {
-              winOverlay.remove();
-              window.location.href = 'https://t.me/LootEarnGames_bot';
-            });
-            
-            return;
+            // إظهار شاشة النتيجة للمستخدم
+            if (state.phase !== 'ended') {
+                const winOverlay = document.createElement('div');
+                winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
+                
+                winOverlay.innerHTML = `
+                  <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
+                  <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
+                  <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للبوت</button>
+                `;
+                document.body.appendChild(winOverlay);
+                document.getElementById('win-close')!.addEventListener('click', () => {
+                  winOverlay.remove();
+                  if ((window as any).Telegram?.WebApp) {
+                      (window as any).Telegram.WebApp.close();
+                  } else {
+                      window.location.href = 'https://t.me/LootEarnGames_bot';
+                  }
+                });
+                return;
+            }
           }
         }
       }
@@ -2025,6 +1995,7 @@ async function boot() {
     const t0 = performance.now();
     if (bench && !bench.done && game) bench.drive(dt);
     
+    // 👇 إيقاف مؤقت لمنع التجميد إذا كانت الشاشات مفتوحة 👇
     if (privateOverlay.style.display === 'flex' || waitOverlay.style.display === 'flex') {
         return;
     }
@@ -2046,16 +2017,17 @@ async function boot() {
   const roomParam = params.get('room');
   if (autostart === 'quick') {
     menu.style.display = 'none';
-    privateOverlay.style.display = 'flex';
-    loadHilltopAd();
-    run('quick');
+    waitOverlay.style.display = 'flex';
+    run('quick'); 
   } 
   else if (autostart === 'create') {
     menu.style.display = 'none';
+    
+    // إظهار اللافتة فوراً
     privateOverlay.style.display = 'flex';
-    loadHilltopAd();
     document.getElementById('p-name')!.textContent = (params.get('name') || 'Player') + ' (X)';
     
+    // إظهار الكود من الرابط فوراً
     const urlRoomCode = new URLSearchParams(window.location.search).get('room');
     if (urlRoomCode) {
         const el1 = document.getElementById('p-top-code');
@@ -2064,6 +2036,7 @@ async function boot() {
         if (el2) el2.textContent = urlRoomCode;
     }
 
+    // مسح الذاكرة (البصمة)
     try {
       const urlParams = new URLSearchParams(window.location.search);
       if (!urlParams.has('fresh')) {
@@ -2076,9 +2049,9 @@ async function boot() {
     } catch (e) {
       console.warn("Could not clear storage", e);
     }
-    const reqSize = params.get('size') === '6' ? 6 : 1;
-    
-    special = { kind: 'invite', mapId: 'citadel', mode: 'elimination', size: reqSize };
+
+    const reqSize = params.get('size') === '2' ? 2 : 1;
+    special = { kind: 'invite', mapId: map, mode, size: reqSize };
     run('start'); 
   } 
   else if (roomParam) {
