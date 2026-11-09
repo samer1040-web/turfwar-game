@@ -257,7 +257,7 @@ export class Game {
         useWeaponPickup: () => {
           const state = this.link.state();
           const me = state?.soldiers.find(s => s.id === this.link.myId());
-          if (!state || !this.input.touch || !this.input.locked || !me?.alive || this.seated || this.nearVehicle >= 0) return false;
+          if (!state || !this.input.touch || !me?.alive || this.seated || this.nearVehicle >= 0) return false;
           const index = this.weaponPickups.nearest(this.player.m.x, this.player.m.y, this.player.m.z, WEAPON_PICKUP_REACH, state.weaponPickups);
           if (index < 0 || this.crates.nearest(this.player.m.x, this.player.m.y, this.player.m.z, CRATE_REACH) >= 0) return false;
           const site = modeOf(state, this.map.def) === 'sabotage' ? this.siteHere(state) : -1;
