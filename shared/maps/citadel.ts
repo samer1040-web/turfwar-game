@@ -155,6 +155,7 @@ export function citadelKeep(): MapDef {
     for (const [x, z] of [[-3, -7], [-3, -3.5], [-3, 0], [-3, 3.5], [-3, 7], [1, -5], [1, 5]]) {
       b.spawn(0, SX + x, sy, z, -Math.PI / 2);
     }
+    // تم حذف القناص من هنا لمنع التداخل مع نقطة الولادة
     b.raw({ kind: 'spawnPad', team: b.team(0), ...b.at(SX - 1, 0), y: sy, rotY: b.rotation(-Math.PI / 2) });
     b.light(SX - 2, sy + 4.5, 0, b.mirroredSide ? 0xff5a4a : 0x58b6ff, 8, 20);
     // Cover between the camp and the barbican.
@@ -206,10 +207,9 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
 
-  b.mirrored(() => {
-    const SX = -62, sy = b.ground(SX, 0);
-    b.weaponPickup('m110', SX + 10, sy, 0);
-  });
+  // إضافة قناصين (واحد لكل فريق) في الساحة الخارجية
+  b.weaponPickup('m110', -48, P, 0); // قناص الفريق الأول
+  b.weaponPickup('m110', 48, P, 0);  // قناص الفريق الثاني
 
   return b.build();
 }
