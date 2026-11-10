@@ -254,6 +254,11 @@ export class Game {
       if (on && !this.touch) this.touch = new TouchControls(container, this.input, {
         typeChat: team => { this.input.clear(); this.hud.openChat(team, text => this.link.say(text, team), true); },
         say: (text, team) => this.link.say(text, team),
+        chooseScope: scope => {
+          this.requested({ kind: 'attach', weapon: 'm110', attachment: scope });
+          this.link.attach('m110', scope);
+          this.audio.ui();
+        },
       });
       else if (!on && this.touch) { this.touch.dispose(); this.touch = undefined; }
       this.input.touch = on;
@@ -695,6 +700,8 @@ export class Game {
       slot: p.slot, weapons: [WEAPONS[p.weapons[0]].name, WEAPONS[p.weapons[1]].name], grenades: p.grenades, smokes: p.smokes, molotovs: p.molotovs, bobas: p.bobas, use,
       storeHot: !!me && buyWindow && (free || inBase(me, this.map.def, sideOf(state, this.map.def, me.team))), reloading: p.reloading,
       holdAim, shots: this.shotCount,
+      sniperScope: p.weapon.id === 'm110' ? p.attachments.m110?.optic ?? 'x6' : undefined,
+      scopeCash: me?.money ?? 0, scopeFree: free,
     });
   }
 

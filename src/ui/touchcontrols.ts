@@ -1,11 +1,12 @@
 import type { Input } from '../game/input';
+import { ATTACHMENTS, attachmentPrice, fitsWeapon, type AttachmentId } from '../../shared/weapons';
 import { GyroAim } from '../game/gyro';
 import type { ActionId } from '../game/keybinds';
 import { type HoldAim } from '../game/holdfire';
 import {
   CONTROLS, controlAction, placeOf, stickActions, stickShown, STICK, TOUCH_LOOK_SCALE, touchSensitivity, type ControlId, type ControlKind, type PlaceId, type TouchContext, type TouchLayout, visibleControls, touchLayout,
 } from '../game/touchlayout';
-import { onLang, t } from './i18n';
+import { attachmentName, onLang, t } from './i18n';
 import { toView, viewRect } from './viewport';
 
 export interface TouchInfo {
@@ -20,6 +21,21 @@ export interface TouchInfo {
   reloading: boolean;
   holdAim: HoldAim;
   shots: number;
+  sniperScope?: AttachmentId;
+  scopeCash?: number;
+  scopeFree?: boolean;
+}
+
+const SNIPER_SCOPE_IDS: AttachmentId[] = ['reflex', 'holo', 'acog', 'x4', 'x6'];
+const SNIPER_SCOPES = SNIPER_SCOPE_IDS
+  .filter(id => fitsWeapon(ATTACHMENTS[id], 'm110'));
+
+export function sniperScopeOptions(current: AttachmentId, cash: number, free: boolean) {
+  return SNIPER_SCOPES.map(id => ({
+    id,
+    price: free ? 0 : attachmentPrice(ATTACHMENTS[id], 'm110'),
+    equipped: current === id,
+  })).map(option => ({ ...option, disabled: option.equipped || cash < option.price }));
 }
 
 const humanName = (id: ControlId | 'stick') => {
@@ -133,11 +149,16 @@ export class TouchControls {
   private context: TouchContext = { scope: 'none' };
   private readonly gyro: GyroAim;
   private readonly gyroButton = document.createElement('button');
+  private readonly scopeButton = document.createElement('button');
+  private readonly scopePanel = document.createElement('section');
+  private scopeOpen = false;
+  private scopeSignature = '';
   private readonly stopLang: () => void;
 
   constructor(container: HTMLElement, private readonly input: Input, private readonly ui: {
     typeChat: (team: boolean) => void;
     say: (text: string, team: boolean) => void;
+    chooseScope: (scope: AttachmentId) => void;
   }) {
     this.root.className = 'touch-layer';
     this.root.setAttribute('aria-label', 'Touch controls');
@@ -149,14 +170,27 @@ export class TouchControls {
     this.gyroButton.hidden = !this.gyro.available;
     this.gyroButton.addEventListener('pointerdown', e => e.stopPropagation(), { signal: this.stop.signal });
     this.gyroButton.addEventListener('click', () => { void this.gyro.toggle(); }, { signal: this.stop.signal });
-    this.root.append(this.stick, this.gyroButton);
+    this.scopeButton.type = 'button';
+    this.scopeButton.className = 'tc-scope-button';
+    this.scopeButton.addEventListener('pointerdown', e => e.stopPropagation(), { signal: this.stop.signal });
+    this.scopeButton.addEventListener('click', () => {
+      this.scopeOpen = !this.scopeOpen;
+      this.scopePanel.hidden = !this.scopeOpen;
+    }, { signal: this.stop.signal });
+    this.scopePanel.className = 'tc-scope-panel';
+    this.scopePanel.hidden = true;
+    this.scopePanel.addEventListener('pointerdown', e => e.stopPropagation(), { signal: this.stop.signal });
+    this.root.append(this.stick, this.gyroButton, this.scopeButton, this.scopePanel);
     container.appendChild(this.root);
     this.root.addEventListener('pointerdown', e => this.pointerDown(e), { signal: this.stop.signal });
     this.root.addEventListener('pointermove', e => this.pointerMove(e), { signal: this.stop.signal });
     this.root.addEventListener('pointerup', e => this.pointerUp(e), { signal: this.stop.signal });
     this.root.addEventListener('pointercancel', e => this.pointerUp(e), { signal: this.stop.signal });
     this.root.addEventListener('contextmenu', e => e.preventDefault(), { signal: this.stop.signal });
-    this.stopLang = onLang(() => this.updateGyroButton(this.gyro.enabled ? (this.gyro.starting ? 'starting' : 'on') : 'off'));
+    this.stopLang = onLang(() => {
+      this.scopeSignature = '';
+      this.updateGyroButton(this.gyro.enabled ? (this.gyro.starting ? 'starting' : 'on') : 'off');
+    });
     this.stop.signal.addEventListener('abort', this.stopLang, { once: true });
     this.updateGyroButton('off');
     this.update({ scope: 'none' }, { slot: 0, weapons: ['', ''], grenades: 0, smokes: 0, molotovs: 0, bobas: 0, storeHot: false, reloading: false, holdAim: 'none', shots: 0 });
@@ -178,6 +212,60 @@ export class TouchControls {
     this.gyroButton.setAttribute('aria-label', title);
     this.gyroButton.dataset.error = state === 'denied' ? 'yes' : 'no';
     this.gyroButton.classList.toggle('on', state === 'on' || state === 'starting');
+  }
+
+  private updateScopeMenu(info: TouchInfo) {
+    const scope = info.sniperScope;
+    this.scopeButton.hidden = !scope;
+    this.scopeButton.textContent = t('tc.scope');
+    this.scopeButton.title = t('tc.scope.open');
+    this.scopeButton.setAttribute('aria-label', this.scopeButton.title);
+    this.scopePanel.hidden = !this.scopeOpen || !scope;
+    if (!scope) this.scopeOpen = false;
+    if (!scope) return;
+
+    const cash = info.scopeCash ?? 0, free = !!info.scopeFree;
+    const signature = `${scope}|${cash}|${free}`;
+    if (signature === this.scopeSignature) return;
+    this.scopeSignature = signature;
+    this.scopePanel.replaceChildren();
+
+    const header = document.createElement('header');
+    const title = document.createElement('b');
+    title.textContent = t('tc.scope.title');
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'tc-scope-close';
+    close.textContent = t('common.close');
+    close.addEventListener('click', () => {
+      this.scopeOpen = false;
+      this.scopePanel.hidden = true;
+    }, { signal: this.stop.signal });
+    header.append(title, close);
+    const list = document.createElement('div');
+    list.className = 'tc-scope-options';
+    for (const option of sniperScopeOptions(scope, cash, free)) {
+      const { id } = option;
+      const def = ATTACHMENTS[id];
+      const price = option.price;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'tc-scope-option';
+      button.disabled = option.disabled;
+      button.setAttribute('aria-pressed', String(option.equipped));
+      const name = document.createElement('span');
+      name.textContent = attachmentName(id, def.name);
+      const state = document.createElement('small');
+      state.textContent = option.equipped ? t('tc.scope.equipped') : price === 0 ? t('common.free') : `$${price.toLocaleString('en-US')}`;
+      button.append(name, state);
+      button.addEventListener('click', () => {
+        this.ui.chooseScope(id);
+        this.scopeOpen = false;
+        this.scopePanel.hidden = true;
+      });
+      list.append(button);
+    }
+    this.scopePanel.append(header, list);
   }
 
   private idFor(target: EventTarget | null): PlaceId | undefined {
@@ -303,6 +391,7 @@ export class TouchControls {
 
   update(ctx: TouchContext, info: TouchInfo) {
     this.context = ctx;
+    this.updateScopeMenu(info);
     const layout = touchLayout();
     this.root.style.setProperty('--op', String(layout.opacity));
     const shown = [...visibleControls(ctx, layout)];
