@@ -368,6 +368,16 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
   resetVehicles(state, ctx);
   for (const s of state.soldiers) {
     s.round = newRoundStats();
+    
+    // ✅ إجبار اللاعب على حمل القناص والإسكوب في بداية كل جولة
+    if (!s.bot) {
+        s.weapons = ['m110', 'm9a1'];
+        s.attachments.m110 = { optic: 'x6' };
+        if (!s.owned.includes('m110')) s.owned.push('m110');
+        if (!s.owned.includes('m9a1')) s.owned.push('m9a1');
+        s.weapon = 0;
+    }
+
     if (s.bot) botShop(s, ctx.random);
     refillAmmo(s);
     spawnSoldier(state, ctx, s);
