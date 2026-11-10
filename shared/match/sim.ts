@@ -62,7 +62,7 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
   };
   resetInventory(s);
   
-  // ✅ إجبار السيرفر على إعطاء القناص لأي لاعب يدخل أي غرفة
+  // ✅ إجبار السيرفر على إعطاء القناص لأي لاعب يدخل أي غرفة (بدون فرض إسكوب)
   s.weapons = [...DEFAULT_WEAPONS];
   s.owned = [...DEFAULT_WEAPONS];
   s.weapon = 0;
