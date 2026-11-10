@@ -180,11 +180,14 @@ export class ViewModel {
       this.addModel(id);
     }
     for (const name of ['Gun_SMG_Ammo']) {
-      const mag = assets.weapons.get(name)!.clone();
-      mag.rotation.y = -Math.PI / 2;
-      mag.visible = false;
-      this.root.add(mag);
-      this.mags.set(name, mag);
+      const magAsset = assets.weapons.get(name);
+      if (magAsset) {
+        const mag = magAsset.clone();
+        mag.rotation.y = -Math.PI / 2;
+        mag.visible = false;
+        this.root.add(mag);
+        this.mags.set(name, mag);
+      }
     }
     this.arms = createArms(assets, team);
     // The rig faces +Z; turn it to look down -Z with the shoulders just behind the camera.
@@ -213,7 +216,11 @@ export class ViewModel {
   }
 
   private addModel(id: WeaponId) {
-    const model = this.assets.weapons.get(weaponModel(WEAPONS[id].model, this.knifeSkin))!.clone();
+    const modelName = weaponModel(WEAPONS[id].model, this.knifeSkin);
+    const asset = this.assets.weapons.get(modelName);
+    if (!asset) return; // Skip if missing asset to prevent crash
+
+    const model = asset.clone();
     model.rotation.y = -Math.PI / 2;
     model.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = false; m.receiveShadow = false; m.frustumCulled = false; } });
     model.visible = false;
@@ -225,10 +232,15 @@ export class ViewModel {
   setKnifeSkin(skin: KnifeSkin) {
     if (skin === this.knifeSkin) return;
     this.knifeSkin = skin;
-    const old = this.models.get('knife')!, shown = old.visible;
-    old.removeFromParent();
+    const old = this.models.get('knife');
+    const shown = old ? old.visible : false;
+    if (old) old.removeFromParent();
     this.addModel('knife');
-    if (this.current === 'knife') { this.models.get('knife')!.visible = shown; this.models.get('knife')!.add(this.fit.group); }
+    const newModel = this.models.get('knife');
+    if (this.current === 'knife' && newModel) { 
+      newModel.visible = shown; 
+      if (this.fit && this.fit.group) newModel.add(this.fit.group); 
+    }
   }
 
   /** Show weapon `id` with its fitted attachments (rebuilt when they change). */
@@ -237,20 +249,40 @@ export class ViewModel {
     const key = `${id}|${ATTACHMENT_SLOTS.map(c => fittedAttachments[c] ?? '').join('|')}`;
     let fit = this.fitted.get(key);
     if (!fit) {
-      fit = fitAttachments(this.assets.weapons, id, fittedAttachments, 'first');
-      fit.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = false; m.frustumCulled = false; } });
-      this.fitted.set(key, fit);
+      try {
+        fit = fitAttachments(this.assets.weapons, id, fittedAttachments, 'first');
+        fit.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = false; m.frustumCulled = false; } });
+        this.fitted.set(key, fit);
+      } catch (e) {
+        console.error("Error fitting attachments for", id, e);
+        return; // Prevent crash if fit fails
+      }
     }
-    if (this.fit) this.fit.group.removeFromParent();
-    this.models.get(this.current)!.visible = false;
+    
+    if (!fit) return; // Prevent crash if fit is still undefined
+
+    if (this.fit && this.fit.group) this.fit.group.removeFromParent();
+    const oldModel = this.models.get(this.current);
+    if (oldModel) oldModel.visible = false;
+    
     if (id !== this.current && !instant) this.equipT = 0;
     this.current = id;
     this.attachments = fittedAttachments;
     this.fit = fit;
-    const model = this.models.get(id)!;
-    model.visible = true;
-    model.add(fit.group);
-    this.flash.position.copy(toGun(fit.muzzle));
+    
+    const model = this.models.get(id);
+    if (model) {
+      model.visible = true;
+      if (fit.group) model.add(fit.group);
+    }
+    
+    // SAFETY CHECK: Fixes the "reading 'muzzle'" crash
+    if (fit.muzzle) {
+      this.flash.position.copy(toGun(fit.muzzle));
+    } else {
+      this.flash.position.set(0, 0, -0.5); // Fallback position for muzzle
+    }
+    
     this.overlay = overlayFor({ ...WEAPONS[id], attachments: fittedAttachments });
     this.slashT = 1;
   }
@@ -451,7 +483,8 @@ export class ViewModel {
     this.grenade.visible = p.throwLeft > 0 && p.throwing !== 'molotov';
     this.bottle.visible = p.throwLeft > 0 && p.throwing === 'molotov';
     // The thrown 藍白拖 has left the hand.
-    if (knife) this.models.get('knife')!.visible = p.slipperFollow <= 0 && p.slippers > 0;
+    const knifeModel = this.models.get('knife');
+    if (knife && knifeModel) knifeModel.visible = p.slipperFollow <= 0 && p.slippers > 0;
     this.boba.visible = raised > 0;
     if (this.grenade.visible) lh.getWorldPosition(this.grenade.position).add(new THREE.Vector3(0.02, 0.03, -0.06));
     if (this.bottle.visible) {
