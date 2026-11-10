@@ -136,11 +136,6 @@ export function citadelKeep(): MapDef {
       b.spawn(0, SX + x, sy, z, -Math.PI / 2);
     }
     
-    // ✅ وضع الأسلحة أمام اللاعب مباشرة (داخل البلوكة) لضمان ظهورها والتقاطها
-    b.weaponPickup('m4a1', SX + 2, sy, -3);
-    b.weaponPickup('m249', SX + 2, sy, 0);
-    b.weaponPickup('m110', SX + 2, sy, 3);
-
     b.raw({ kind: 'spawnPad', team: b.team(0), ...b.at(SX - 1, 0), y: sy, rotY: b.rotation(-Math.PI / 2) });
     b.light(SX - 2, sy + 4.5, 0, b.mirroredSide ? 0xff5a4a : 0x58b6ff, 8, 20);
     b.box(-52, b.ground(-52, -6), -6, 0.8, 1.3, 3.6, 'sandstone');
@@ -187,6 +182,21 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m1014', -10.9, keepRoof, -11);
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
+
+  // ✅ وضع الأسلحة خارج الدرع تماماً، على العشب أمام اللاعب (إحداثيات مطلقة)
+  const groundY = b.ground(-52, 0);
+  
+  // أسلحة قاعدة اللاعب الأول (الفريق الأول)
+  b.weaponPickup('m4a1', -52, groundY, -3);
+  b.weaponPickup('m1014', -52, groundY, 0);
+  b.weaponPickup('m249', -52, groundY, 3);
+  b.weaponPickup('m110', -52, groundY, 6);
+
+  // أسلحة قاعدة اللاعب الثاني (الفريق الثاني)
+  b.weaponPickup('m4a1', 52, groundY, -3);
+  b.weaponPickup('m1014', 52, groundY, 0);
+  b.weaponPickup('m249', 52, groundY, 3);
+  b.weaponPickup('m110', 52, groundY, 6);
 
   return b.build();
 }
