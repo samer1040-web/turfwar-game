@@ -418,8 +418,20 @@ export class Game {
     if (me) {
       if (me.team !== this.myTeam) this.changeSides();
       this.myTeam = me.team;
-      if (me.alive && !this.wasAlive) { this.player.spawnFrom(me); this.spectating = -1; this.shownWeapon = ''; this.deployed = true; }
-      else if (me.alive) this.player.syncGear(me);
+      
+      if (me.alive && !this.wasAlive) { 
+        this.player.spawnFrom(me); this.spectating = -1; this.shownWeapon = ''; this.deployed = true; 
+      }
+      else if (me.alive) { 
+        // ✅ فحص: إذا كان السلاح في السيرفر يختلف عن السلاح في العميل، قم بتحديثه فوراً
+        if (this.player.weapons[0] !== me.weapons[0] || this.player.weapons[1] !== me.weapons[1]) {
+          this.player.spawnFrom(me);
+          this.shownWeapon = '';
+        } else {
+          this.player.syncGear(me); 
+        }
+      }
+
       if (!me.alive && this.wasAlive) {
         this.player.alive = false;
         this.deathCam.set(this.player.m.x, this.player.m.y + 1.6, this.player.m.z);
@@ -656,6 +668,7 @@ export class Game {
 
   private touchFrame(state: MatchState, me: Soldier | undefined, site: number, myJob: boolean, buyWindow: boolean) {
     const p = this.player, live = state.roundPhase === 'live';
+    
     const playing = !!me && (this.input.locked || this.input.touch) && !this.buymenu.open && !this.hud.chatting && !this.menu.open && state.phase !== 'ended';
     
     let ctx: TouchContext = { scope: 'none' };
