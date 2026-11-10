@@ -37,6 +37,15 @@ export function opticOptions(weapon: WeaponId, current: AttachmentId, cash: numb
   })).map(option => ({ ...option, disabled: option.equipped || cash < option.price }));
 }
 
+export function opticOptionsFor(info: Pick<TouchInfo, 'scopeWeapon' | 'scopeOptic' | 'scopeCash' | 'scopeFree'>) {
+  if (!info.scopeWeapon) return [];
+  return opticOptions(info.scopeWeapon, info.scopeOptic ?? 'irons', info.scopeCash ?? 0, !!info.scopeFree);
+}
+
+export function weaponButtonName(id: PlaceId, weapons: TouchInfo['weapons']) {
+  return id === 'primary' ? weapons[0] : id === 'secondary' ? weapons[1] : '';
+}
+
 const humanName = (id: ControlId | 'stick') => {
   const names: Record<string, string> = {
     fire: 'Fire', hipfire: 'Hipfire', aim: 'Aim', jump: 'Jump', crouch: 'Crouch', reload: 'Reload',
@@ -222,10 +231,10 @@ export class TouchControls {
     this.scopeButton.setAttribute('aria-label', this.scopeButton.title);
     this.scopePanel.hidden = !this.scopeOpen || !weapon;
     if (!weapon) this.scopeOpen = false;
-    if (!weapon || !optic) return;
+    if (!weapon) return;
 
-    const cash = info.scopeCash ?? 0, free = !!info.scopeFree;
-    const signature = `${weapon}|${optic}|${cash}|${free}`;
+    const current = optic ?? 'irons';
+    const signature = `${weapon}|${current}|${info.scopeCash ?? 0}|${!!info.scopeFree}`;
     if (signature === this.scopeSignature) return;
     this.scopeSignature = signature;
     this.scopePanel.replaceChildren();
@@ -244,7 +253,7 @@ export class TouchControls {
     header.append(title, close);
     const list = document.createElement('div');
     list.className = 'tc-scope-options';
-    for (const option of opticOptions(weapon, optic, cash, free)) {
+    for (const option of opticOptionsFor(info)) {
       const { id } = option;
       const def = ATTACHMENTS[id];
       const price = option.price;
@@ -426,12 +435,24 @@ export class TouchControls {
         this.buttons.set(id, el);
       }
       const el = this.buttons.get(id)!;
+      const weaponName = weaponButtonName(id, info.weapons);
+      let label = el.querySelector<HTMLSpanElement>('.tc-l');
+      if (weaponName && !label) {
+        label = document.createElement('span');
+        label.className = 'tc-l';
+        el.appendChild(label);
+      } else if (!weaponName && label) {
+        label.remove();
+        label = null;
+      }
+      if (label) label.textContent = weaponName;
+      el.classList.toggle('text', !!weaponName);
       const p = placeOf(layout, id);
       el.style.left = `${p.x * 100}%`;
       el.style.top = `${p.y * 100}%`;
       el.style.setProperty('--d', cssSize(CONTROLS[id].size * p.size));
       el.classList.toggle('active', (info.holdAim !== 'none' && id === 'fire') || !!(info.reloading && id === 'reload'));
-      el.title = controlName(id, layout);
+      el.title = weaponName ? `${controlName(id, layout)} · ${weaponName}` : controlName(id, layout);
       el.setAttribute('aria-label', el.title);
       const action = controlAction(id, layout).action;
       el.dataset.action = action;
