@@ -380,8 +380,8 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
     
     // ✅ إجبار اللاعب على حمل القناص (m110) في بداية كل جولة (بدون إجبار إسكوب معين)
     if (!s.bot) {
-        s.weapons = ['m110', 'm9a1'];
-        s.owned = ['m110', 'm9a1'];
+                s.weapons = ['m110', 'm9a1'] as any;
+        s.owned = ['m110', 'm9a1'] as any;
         s.weapon = 0;
     }
 
