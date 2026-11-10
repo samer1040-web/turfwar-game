@@ -226,9 +226,26 @@ describe('rounds', () => {
     expect(env.state.roundPhase).toBe('freeze');
     expect(a.alive).toBe(true); expect(a.health).toBe(100);
     expect(a.money).toBe(CASH.matchBonus);
-    expect(a.weapons).toEqual(['mp5', 'm9a1']);
+    expect(a.weapons).toEqual(['m4a1', 'm110']);
     tick(env.state, env.ctx, env.state.config.freezeTime + 0.1);
     expect(env.state.roundPhase).toBe('live');
+  });
+
+  it('keeps purchased weapons and attachments for the rest of the match', () => {
+    const { state, ctx } = setup({ ...ELIMINATION, warmup: 0 });
+    const player = addSoldier(state, ctx, { name: 'Buyer', team: 0, bot: false });
+    addSoldier(state, ctx, { name: 'Rival', team: 1, bot: false });
+    goLive(state, ctx);
+    player.money = 10000;
+
+    expect(buyItem(state, ctx, player.id, 'mp5').ok).toBe(true);
+    expect(buyAttachmentFor(state, player.id, 'm110', 'x6').ok).toBe(true);
+    startRound(state, ctx);
+
+    expect(player.weapons).toEqual(['mp5', 'm110']);
+    expect(player.owned).toEqual(expect.arrayContaining(['m4a1', 'm110', 'mp5']));
+    expect(player.attachments.m110?.optic).toBe('x6');
+    expect(player.ammo).toEqual([32, 6]);
   });
 
   it('the last team standing takes the round; the next round redeploys both teams in their bases', () => {
@@ -404,6 +421,8 @@ describe('server-side validation', () => {
 
   it('accepts plausible body and head hits without rewarding cash or personal score', () => {
     const { state, ctx, a, b, events } = duel();
+    a.weapons[0] = 'mp5';
+    a.ammo[0] = WEAPONS.mp5.magazine;
     const money = a.money;
     expect(fireShot(state, ctx, a.id, claimAt(a, b))).toBe(true);
     expect(b.health).toBe(100 - WEAPONS.mp5.damage.body);
@@ -430,19 +449,21 @@ describe('server-side validation', () => {
     expect(accepted).toBeLessThan(5);
     // Slow weapons get no burst: a second instant M110 shot is refused, a timely one accepted.
     state.config.freeBuy = true;
+    buyItem(state, ctx, a.id, 'mp7');
     buyItem(state, ctx, a.id, 'm110');
     state.config.freeBuy = false;
     a.switchLeft = 0; a.fireCooldown = 0; a.money = 99999;
-    expect(a.weapons[0]).toBe('m110');
+    expect(a.weapons[1]).toBe('m110');
+    const sniperSlot = 1;
     expect(fireShot(state, ctx, a.id, claimAt(a, b))).toBe(true);
     expect(fireShot(state, ctx, a.id, claimAt(a, b))).toBe(false);
     a.fireCooldown -= 0.7;
     expect(fireShot(state, ctx, a.id, claimAt(a, b))).toBe(true);
     // Empty magazine.
-    a.fireCooldown = 0; a.ammo[0] = 0;
+    a.fireCooldown = 0; a.ammo[sniperSlot] = 0;
     expect(fireShot(state, ctx, a.id, claimAt(a, b))).toBe(false);
     // A wall between them.
-    a.ammo[0] = 5; a.fireCooldown = 0; b.health = 100;
+    a.ammo[sniperSlot] = 5; a.fireCooldown = 0; b.health = 100;
     const wall = new CollisionWorld([{ minX: -0.5, minY: -10, minZ: 10, maxX: 0.5, maxY: 30, maxZ: 34, surface: "concrete" }, ...ctx.world.solids], ctx.world.ramps, ctx.world.terrain, ctx.world.bounds);
     fireShot(state, { ...ctx, world: wall }, a.id, claimAt(a, b));
     expect(b.health).toBe(100);
@@ -453,6 +474,8 @@ describe('server-side validation', () => {
 
   it('accepts a full-auto magazine fired at the real rate despite network jitter', () => {
     const { state, ctx, a, b } = duel();
+    a.weapons[0] = 'mp5';
+    a.ammo[0] = WEAPONS.mp5.magazine;
     b.health = 1e6;
     const r = rng(7), interval = WEAPONS.mp5.interval;
     const arrivals = Array.from({ length: 30 }, (_, i) => i * interval + 0.08 + (r() - 0.5) * 0.12).sort((x, y) => x - y);
@@ -575,13 +598,13 @@ describe('store and cash', () => {
     const base = ctx.map.spawns.find(p => p.team === side)!;
     place(a, base.x, base.z, ctx, base.y + 1);
     a.money = 5000;
-    expect(buyItem(state, ctx, a.id, 'm4a1').ok).toBe(true);
-    expect(a.money).toBe(5000 - WEAPONS.m4a1.price);
-    expect(a.weapons[0]).toBe('m4a1');
+    expect(buyItem(state, ctx, a.id, 'm249').ok).toBe(true);
+    expect(a.money).toBe(5000 - WEAPONS.m249.price);
+    expect(a.weapons[0]).toBe('m249');
     expect(buyItem(state, ctx, a.id, 'mp5').ok).toBe(true);
-    expect(a.money).toBe(5000 - WEAPONS.m4a1.price);
+    expect(a.money).toBe(5000 - WEAPONS.m249.price);
     expect(buyItem(state, ctx, a.id, 'm1014').ok).toBe(false); // too expensive now
-    expect(buyItem(state, ctx, a.id, 'm4a1').ok).toBe(true);    // owned: free
+    expect(buyItem(state, ctx, a.id, 'm249').ok).toBe(true);    // owned: free
     state.roundClock = state.config.buyTime + 1;
     expect(buyItem(state, ctx, a.id, 'mp5').ok).toBe(false);
   });
@@ -591,16 +614,16 @@ describe('store and cash', () => {
     a.money = 5000; b.money = 5000;
     tick(state, ctx, state.config.buyTime);
     // Mid-map, late in the round: closed.
-    expect(buyItem(state, ctx, a.id, 'm4a1').ok).toBe(false);
+    expect(buyItem(state, ctx, a.id, 'm249').ok).toBe(false);
     killSoldier(state, ctx, b, a, 'mp5', false);
     tick(state, ctx, 1 / TICK_RATE);
     expect(state.roundPhase).toBe('over');
-    expect(buyItem(state, ctx, a.id, 'm4a1').ok).toBe(true);
+    expect(buyItem(state, ctx, a.id, 'm249').ok).toBe(true);
     expect(buyItem(state, ctx, b.id, 'm1014').ok).toBe(true);
     // The next round deploys them with what they bought; past its buy time, mid-map is closed again.
     tick(state, ctx, state.config.roundOverTime + 0.1);
     expect(state.roundPhase).toBe('freeze');
-    expect(a.weapons[0]).toBe('m4a1');
+    expect(a.weapons[0]).toBe('m249');
     expect(b.weapons[0]).toBe('m1014');
     tick(state, ctx, state.config.buyTime);
     place(a, -6, 22, ctx);
@@ -610,18 +633,18 @@ describe('store and cash', () => {
   it('attachments fit by weapon, replace their category and change stats', () => {
     const { state, a } = duel();
     a.money = 10000;
-    expect(buyAttachmentFor(state, a.id, 'mp5', 'acog').ok).toBe(true);
-    expect(a.attachments.mp5?.optic).toBe('acog');
-    expect(buyAttachmentFor(state, a.id, 'mp5', 'holo').ok).toBe(true);
-    expect(a.attachments.mp5?.optic).toBe('holo');
-    expect(buyAttachmentFor(state, a.id, 'm4a1', 'acog').ok).toBe(false); // not owned
+    expect(buyAttachmentFor(state, a.id, 'm4a1', 'acog').ok).toBe(true);
+    expect(a.attachments.m4a1?.optic).toBe('acog');
+    expect(buyAttachmentFor(state, a.id, 'm4a1', 'holo').ok).toBe(true);
+    expect(a.attachments.m4a1?.optic).toBe('holo');
+    expect(buyAttachmentFor(state, a.id, 'm249', 'acog').ok).toBe(false); // not owned
     const before = a.money;
-    expect(buyAttachmentFor(state, a.id, 'mp5', 'extendedClip').ok).toBe(true);
+    expect(buyAttachmentFor(state, a.id, 'm4a1', 'extendedClip').ok).toBe(true);
     expect(a.money).toBeLessThan(before);
-    expect(weaponStats('mp5', a.attachments.mp5).magazine).toBeGreaterThan(WEAPONS.mp5.magazine);
+    expect(weaponStats('m4a1', a.attachments.m4a1).magazine).toBeGreaterThan(WEAPONS.m4a1.magazine);
     // Gadgets stack: a laser, a flashlight and a suppressor together, the optic kept.
-    for (const id of ['laser', 'flashlight', 'suppressor'] as const) expect(buyAttachmentFor(state, a.id, 'mp5', id).ok).toBe(true);
-    expect(a.attachments.mp5).toMatchObject({ optic: 'holo', laser: 'laser', light: 'flashlight', muzzle: 'suppressor', magazine: 'extendedClip' });
+    for (const id of ['laser', 'flashlight', 'suppressor'] as const) expect(buyAttachmentFor(state, a.id, 'm4a1', id).ok).toBe(true);
+    expect(a.attachments.m4a1).toMatchObject({ optic: 'holo', laser: 'laser', light: 'flashlight', muzzle: 'suppressor', magazine: 'extendedClip' });
   });
 
   it('the M67 is limited to one and High Explosive is an upgrade', () => {
@@ -639,7 +662,7 @@ describe('store and cash', () => {
     place(a, crate.x + 1, crate.z, ctx, crate.y + 1);
     a.reserve[0] = 0; a.money = 1000;
     expect(useAmmoCrate(state, ctx, a.id, 0)).toBe(true);
-    expect(a.reserve[0]).toBe(WEAPONS.mp5.restock);
+    expect(a.reserve[0]).toBe(WEAPONS.m4a1.restock);
     expect(a.money).toBe(1000 - CASH.crate);
     expect(useAmmoCrate(state, ctx, a.id, 0)).toBe(true);
     expect(a.money).toBe(1000 - CASH.crate);
@@ -754,7 +777,7 @@ describe('M18 smoke grenade', () => {
     expect(smokeBlocks(state.bodies, { x: -6, y: a.m.y + 1.6, z: 40 }, { x: 6, y: a.m.y + 1.6, z: 40 })).toBe(false);
     expect(smokeBlocks(state.bodies, { x: 0, y: a.m.y + 1.6, z: 23 }, { x: 0, y: a.m.y + 1.6, z: 60 })).toBe(true);
     expect(fireShot(state, ctx, a.id, claimAt(a, b))).toBe(true);
-    expect(b.health).toBe(100 - WEAPONS.mp5.damage.body);
+    expect(b.health).toBe(100 - WEAPONS.m4a1.damage.body);
   });
 
   it('bots do not see an enemy behind it', () => {
@@ -1135,7 +1158,7 @@ describe('frame', () => {
 });
 
 describe('Citadel weapon pickups', () => {
-  it('replace the primary with a full weapon, reject stale or out-of-reach claims, and respawn next round', () => {
+  it('replace the matching slot with a full weapon, reject stale or out-of-reach claims, and respawn next round', () => {
     const { ctx, state } = setup({ ...ELIMINATION, warmup: 0 }, 11, 'citadel');
     const player = addSoldier(state, ctx, { name: 'Pickup', team: 0, bot: false });
     const rival = addSoldier(state, ctx, { name: 'Rival', team: 1, bot: false });
@@ -1145,10 +1168,11 @@ describe('Citadel weapon pickups', () => {
     player.m.x = pickup.x; player.m.y = pickup.y; player.m.z = pickup.z;
     player.weapons[0] = 'mp5'; player.weapon = 2; player.ammo[0] = 1; player.reserve[0] = 2;
     expect(useWeaponPickup(state, ctx, player.id, 0)).toBe(true);
-    expect(player.weapons[0]).toBe(pickup.weapon);
-    expect(player.weapon).toBe(0);
-    expect(player.ammo[0]).toBe(weaponStats(pickup.weapon).magazine);
-    expect(player.reserve[0]).toBe(weaponStats(pickup.weapon).reserve);
+    const pickupSlot = pickup.weapon === 'm110' || pickup.weapon === 'mp7' ? 1 : 0;
+    expect(player.weapons[pickupSlot]).toBe(pickup.weapon);
+    expect(player.weapon).toBe(pickupSlot);
+    expect(player.ammo[pickupSlot]).toBe(weaponStats(pickup.weapon).magazine);
+    expect(player.reserve[pickupSlot]).toBe(weaponStats(pickup.weapon).reserve);
     expect(state.weaponPickups[0]).toBe(false);
     expect(useWeaponPickup(state, ctx, rival.id, 0)).toBe(false);
 
@@ -1172,6 +1196,8 @@ describe('Citadel weapon pickups', () => {
     expect(useWeaponPickup(state, ctx, player.id, index)).toBe(true);
     expect(player.attachments.m110?.optic).toBe('x6');
     expect(weaponStats('m110', player.attachments.m110).zoom).toBeCloseTo(1 / 6);
+    expect(player.weapons[0]).toBe('m4a1');
+    expect(player.weapons[1]).toBe('m110');
   });
 
   it('lets the player collect every fixed Citadel weapon from the interaction radius', () => {
@@ -1185,12 +1211,14 @@ describe('Citadel weapon pickups', () => {
       player.m.z = pickup.z;
 
       expect(useWeaponPickup(state, ctx, player.id, index), pickup.weapon).toBe(true);
-      expect(player.weapons[0]).toBe(pickup.weapon);
+      const pickupSlot = pickup.weapon === 'm110' || pickup.weapon === 'mp7' ? 1 : 0;
+      expect(player.weapons[pickupSlot]).toBe(pickup.weapon);
+      expect(player.weapon).toBe(pickupSlot);
       expect(state.weaponPickups[index]).toBe(false);
     }
   });
 
-  it('lets each team reach the single M110 placed outside its spawn shield', () => {
+  it('lets each team reach an M110 pickup outside its spawn shield', () => {
     const { ctx } = setup({ ...ELIMINATION, warmup: 0 }, 13, 'citadel');
     const snipers = ctx.map.weaponPickups!.filter(p => p.weapon === 'm110');
     expect(snipers).toHaveLength(2);

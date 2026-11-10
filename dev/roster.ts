@@ -18,7 +18,7 @@ r.scene.fog = null;
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: 0x9c8a74 }));
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; r.scene.add(ground);
 
-const WEAPONS_BY_SLOT: WeaponId[] = ['m4a1', 'mp5', 'm1014', 'm110', 'm9a1', 'mp7', 'm249', 'm4a1', 'mp5'];
+const WEAPONS_BY_SLOT: WeaponId[] = ['m4a1', 'mp5', 'm1014', 'm110', 'mp7', 'm249', 'm4a1', 'mp5', 'm110'];
 // Teams alternate so the SWAT operators sit between the six Militia irregulars.
 const TEAMS = [0, 1, 1, 0, 1, 1, 0, 1, 1];
 const views = TEAMS.map((team, i) => {

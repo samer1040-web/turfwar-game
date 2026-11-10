@@ -21,7 +21,6 @@ const HOLD: Record<WeaponId, { hip: THREE.Vector3; adsZ: number }> = {
   m110: { hip: new THREE.Vector3(0.12, -0.22, -0.34), adsZ: -0.4 },
   m249: { hip: new THREE.Vector3(0.15, -0.36, -0.38), adsZ: -0.4 },
   m1014: { hip: new THREE.Vector3(0.15, -0.27, -0.36), adsZ: -0.38 },
-  m9a1: { hip: new THREE.Vector3(0.14, -0.19, -0.42), adsZ: -0.4 },
 };
 
 const ease = (t: number) => t * t * (3 - 2 * t);

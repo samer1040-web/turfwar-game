@@ -72,8 +72,6 @@ interface GunVoice {
   supersonic?: boolean;
 }
 const GUNS: Partial<Record<WeaponId, GunVoice>> = {
-  // Pistol: snappy, bright, short, a high slide clack.
-  m9a1: { takes: 3, far: 'pistol', rate: 1.04, gain: 0.8, highpass: 110, eq: [[220, 2], [2800, 2.5]], thump: [150, 55, 0.06, 0.4], crack: 0.4, room: 0.2, mech: ['clack', 0.004, 0.2, 1.45], tail: 0.6, casing: 'small' },
   // PDW: thin, fast and crisp.
   mp7: { takes: 4, far: 'smg', rate: 1.16, gain: 0.72, highpass: 200, eq: [[3400, 3]], thump: [135, 55, 0.045, 0.3], crack: 0.35, room: 0.16, mech: ['click', 0.003, 0.12, 1.35], tail: 0.5, casing: 'small' },
   // 9 mm SMG: rounder, a little low-mid.
@@ -91,7 +89,6 @@ const GUNS: Partial<Record<WeaponId, GunVoice>> = {
 /** Reload foley per weapon and stage (game.ts plays 'out', then 'in' at 65% and 'charge' at 88% of the reload). */
 type ReloadStage = 'out' | 'in' | 'charge';
 const RELOADS: Partial<Record<WeaponId, Record<ReloadStage, Hit[]>>> = {
-  m9a1: { out: [['pistol-out', 0, 0.8, 1]], in: [['pistol-in', 0, 0.9, 1]], charge: [['slide', 0, 0.75, 1.05]] },
   mp7: { out: [['smg-out', 0, 0.75, 1.1]], in: [['smg-in', 0, 0.7, 1.1]], charge: [['charge', 0, 0.55, 1.2], ['latch', 0.1, 0.4, 1.2]] },
   mp5: { out: [['smg-out', 0, 0.8, 1]], in: [['smg-in', 0, 0.8, 0.95]], charge: [['charge', 0, 0.6, 1], ['bolt', 0.09, 0.6, 1]] },
   m4a1: { out: [['click', 0, 0.35, 0.9], ['mag-out', 0.03, 0.8, 1]], in: [['mag-in', 0, 0.85, 1]], charge: [['charge', 0, 0.6, 1.05], ['bolt', 0.12, 0.55, 1.1]] },
@@ -102,7 +99,6 @@ const RELOADS: Partial<Record<WeaponId, Record<ReloadStage, Hit[]>>> = {
 
 /** Handling when a weapon comes up. */
 const EQUIPS: Partial<Record<WeaponId, Hit[]>> = {
-  m9a1: [['latch', 0.07, 0.5, 1.1]],
   mp7: [['click', 0.08, 0.45, 1.1]],
   mp5: [['click', 0.08, 0.5, 1], ['latch', 0.2, 0.3, 0.95]],
   m4a1: [['latch', 0.06, 0.5, 0.9], ['bolt', 0.2, 0.3, 1.2]],
@@ -128,7 +124,6 @@ interface GunSound {
 }
 const GUN_SOUNDS: Record<WeaponId, GunSound> = {
   knife: { heavy: 0, melee: true },
-  m9a1: { heavy: 0.8 },
   mp7: { heavy: 0.65, layers: [['square', 2600, 900, 0.03, 0.05]] },
   mp5: { heavy: 0.72, layers: [['square', 2200, 800, 0.025, 0.05]] },
   m4a1: { heavy: 1, layers: [['sawtooth', 1400, 260, 0.07, 0.06]] },
@@ -700,7 +695,7 @@ export class Audio {
     const t = this.now();
     if (this.hasFoley && weapon !== 'knife') {
       const out = this.out(0.3, undefined, undefined, 0.05);
-      this.sample('foley-click', out, t, (weapon === 'm9a1' || weapon === 'mp7' ? 1.35 : 1.15) * jitter(0.03), 0.9);
+      this.sample('foley-click', out, t, (weapon === 'mp7' ? 1.35 : 1.15) * jitter(0.03), 0.9);
       this.noiseBurst(out, t, 0.012, 'highpass', 4500, 1.5, 0.25);
       return;
     }

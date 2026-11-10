@@ -13,8 +13,8 @@ import { L, applyI18n, attachmentName, onLang, t, weaponClass, type Key } from '
 
 type Tab = 'primary' | 'secondary' | 'tactical' | 'attachments';
 const TABS: { id: Tab }[] = [{ id: 'primary' }, { id: 'secondary' }, { id: 'tactical' }, { id: 'attachments' }];
-const PRIMARY: WeaponId[] = ['mp5', 'm4a1', 'm1014', 'm110', 'm249'];
-const SECONDARY: WeaponId[] = ['m9a1', 'mp7'];
+const PRIMARY: WeaponId[] = ['mp5', 'm4a1', 'm1014', 'm249'];
+const SECONDARY: WeaponId[] = ['m110', 'mp7'];
 const CLASS = (c: WeaponClass) => weaponClass(c);
 /** Attachment slots on the gun: one item each, so gadgets in different slots stack. */
 const SLOT_EMPTY: Record<AttachmentCategory, Key> = {

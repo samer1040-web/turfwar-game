@@ -162,7 +162,7 @@ describe('finger look while aiming', () => {
   const turn = (weapon: 'mp5' | 'm110', aimed: boolean, mouseSens = 1) => {
     const p = new LocalPlayer();
     p.alive = true;
-    p.weapons = [weapon, 'm9a1'];
+    p.weapons = [weapon, 'm110'];
     p.ads = aimed ? 1 : 0;
     const input = fakeInput(aimed, mouseSens);
     input.touchLook(100, 0, TOUCH_LOOK_SCALE);
@@ -178,7 +178,7 @@ describe('finger look while aiming', () => {
 
   it('scales with the zoom like the mouse (zoom-matched), scoped snipers the most', () => {
     const DEG = Math.PI / 180, hip = turn('m110', false);
-    const p = new LocalPlayer(); p.weapons = ['m110', 'm9a1']; p.ads = 1;
+    const p = new LocalPlayer(); p.weapons = ['m4a1', 'm110']; p.slot = 1; p.ads = 1;
     const matched = Math.tan(p.sightFov * DEG / 2) / Math.tan(settings.fov * DEG / 2);
     expect(turn('m110', true) / hip).toBeCloseTo(matched * settings.adsSensitivity, 3);
     expect(turn('m110', true)).toBeLessThan(turn('mp5', true));

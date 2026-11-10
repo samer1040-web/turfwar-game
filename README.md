@@ -227,7 +227,7 @@ texture, sound and line of code here is original or CC0/OFL.
 - Gunshots: recordings from *The Free Firearm Sound Library* by Ben Jaszczak, Brian Nelson,
   Kevin Heras and Matthew Nanney — CC0 1.0
   (https://opengameart.org/content/the-free-firearm-sound-library). Each firearm plays two to four
-  separate near-distance takes round-robin (M9A1: Walther PPQ, MP7: PPSh, MP5: Carl Gustav M45,
+  separate near-distance takes round-robin (MP7: PPSh, MP5: Carl Gustav M45,
   M4A1: AR-15, M249: AK-47, M1014: Benelli Nova and Winchester Model 12, M110: Tikka T3 and
   Springfield 1917 .30-06), with a mid-distance take per class as the distant layer.
 - Reload and handling foley, all CC0 1.0 on OpenGameArt: SpringySpringo's *Gun Reload Sounds*,

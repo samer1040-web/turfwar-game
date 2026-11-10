@@ -2,17 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { GRENADE, SMOKE, WEAPONS } from '../../shared/weapons';
 import { purchaseOf, type Owned } from './purchases';
 
-const base: Owned = { owned: ['mp5', 'm9a1'], grenades: 0, grenadeHE: false, smokes: 0, molotovs: 0, bobas: 0, attachments: {} };
+const base: Owned = { owned: ['m4a1', 'm110'], grenades: 0, grenadeHE: false, smokes: 0, molotovs: 0, bobas: 0, attachments: {} };
 
 describe('store purchases for analytics', () => {
   it('counts a gun once the host owns it for us, at its price', () => {
-    expect(purchaseOf({ kind: 'item', item: 'm4a1' }, base, base, false)).toBeUndefined();
-    expect(purchaseOf({ kind: 'item', item: 'm4a1' }, base, { ...base, owned: [...base.owned, 'm4a1'] }, false)).toEqual({ item: 'm4a1', price: WEAPONS.m4a1.price });
-    expect(purchaseOf({ kind: 'item', item: 'm4a1' }, base, { ...base, owned: [...base.owned, 'm4a1'] }, true)).toEqual({ item: 'm4a1', price: 0 });
+    expect(purchaseOf({ kind: 'item', item: 'm1014' }, base, base, false)).toBeUndefined();
+    expect(purchaseOf({ kind: 'item', item: 'm1014' }, base, { ...base, owned: [...base.owned, 'm1014'] }, false)).toEqual({ item: 'm1014', price: WEAPONS.m1014.price });
+    expect(purchaseOf({ kind: 'item', item: 'm1014' }, base, { ...base, owned: [...base.owned, 'm1014'] }, true)).toEqual({ item: 'm1014', price: 0 });
   });
 
   it('does not count re-equipping an owned gun', () => {
-    expect(purchaseOf({ kind: 'item', item: 'mp5' }, base, base, false)).toBeUndefined();
+    expect(purchaseOf({ kind: 'item', item: 'm4a1' }, base, base, false)).toBeUndefined();
   });
 
   it('counts grenades and attachments', () => {

@@ -33,11 +33,11 @@ const actors: Actor[] = [
   { team: 0, weapon: 'm4a1', start: [-1.0, -14], delay: 0, aim: () => [0, 20], legs: [{ x: -1.0, z: -3, speed: S }, { x: -1.6, z: 1, speed: 3, stance: 'crouch' }], shoots: [[9, 12], [13, 16]] },
   { team: 0, weapon: 'mp5', start: [1.0, -15.5], delay: 0.3, aim: () => [0, 20], legs: [{ x: 1.0, z: -4, speed: S }, { x: 1.7, z: -0.5, speed: 5.5, stance: 'sprint' }, { x: 1.4, z: 0.5, speed: 2 }], shoots: [[9, 13], [15, 17]], dies: 18.5 },
   { team: 0, weapon: 'm1014', start: [-1.0, -17], delay: 0.6, aim: () => [0, 20], legs: [{ x: -0.2, z: -6, speed: S }, { x: -0.4, z: -3, speed: 3.5 }], shoots: [[10, 11.5], [14, 15]] },
-  { team: 0, weapon: 'm9a1', start: [1.0, -18.5], delay: 0.9, aim: () => [0, 20], legs: [{ x: 1.0, z: -8, speed: S }, { x: 1.3, z: -4, speed: 6, stance: 'sprint' }], shoots: [[11, 12.5]] },
+  { team: 0, weapon: 'mp7', start: [1.0, -18.5], delay: 0.9, aim: () => [0, 20], legs: [{ x: 1.0, z: -8, speed: S }, { x: 1.3, z: -4, speed: 6, stance: 'sprint' }], shoots: [[11, 12.5]] },
   { team: 1, weapon: 'm4a1', start: [-1.2, 17], delay: 3, aim: () => [0, -20], legs: [{ x: -1.2, z: 9, speed: 3.2 }, { x: -1.9, z: 5, speed: 4.4 }, { x: -1.0, z: 3.5, speed: 2, stance: 'crouch' }], shoots: [[8, 11], [12.5, 15]], dies: 20 },
   { team: 1, weapon: 'mp5', start: [1.2, 18.5], delay: 3.4, aim: () => [0, -20], legs: [{ x: 1.2, z: 10, speed: 3.2 }, { x: 0.6, z: 6, speed: 7, stance: 'sprint' }, { x: 1.8, z: 3, speed: 3 }], shoots: [[8.5, 11], [13, 16]], dies: 19 },
   { team: 1, weapon: 'm1014', start: [0, 20], delay: 3.8, aim: () => [0, -20], legs: [{ x: 0, z: 11, speed: 3.2 }, { x: -0.5, z: 8, speed: 2.4, stance: 'crouch' }], shoots: [[9, 11], [13, 14.5], [16, 17.5]], dies: 21.5 },
-  { team: 1, weapon: 'm9a1', start: [1.0, 21.5], delay: 4.2, aim: () => [0, -20], legs: [{ x: 1.0, z: 12, speed: 3.2 }, { x: 1.4, z: 9, speed: 5 }], shoots: [[9.5, 11.5]], dies: 17 },
+  { team: 1, weapon: 'mp7', start: [1.0, 21.5], delay: 4.2, aim: () => [0, -20], legs: [{ x: 1.0, z: 12, speed: 3.2 }, { x: 1.4, z: 9, speed: 5 }], shoots: [[9.5, 11.5]], dies: 17 },
 ];
 
 interface Live { a: Actor; view: SoldierView; x: number; z: number; leg: number; wait: number; pose: SoldierPose; shot: number }

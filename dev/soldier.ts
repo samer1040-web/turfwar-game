@@ -22,7 +22,7 @@ let att = parseAttachments(weapon, params.get('att'));
 const base: SoldierPose = { x: 0, y: 0, z: 0, vx: 0, vz: 0, vy: 0, yaw: 0, pitch: 0, crouch: 0, grounded: true, sprint: false, ads: false, slide: false, alive: true, weapon, reloading: 0, firing: false };
 const poses: [string, Partial<SoldierPose>][] = [
   ['idle', {}], ['aim up', { pitch: 0.6 }], ['jog', { vz: -5 }], ['sprint', { vz: -8.6, sprint: true }],
-  ['crouch', { crouch: 1 }], ['pistol', { weapon: 'm9a1' }], ['knife', { weapon: 'knife' }], ['using', { using: true }], ['dead', { alive: false }],
+  ['crouch', { crouch: 1 }], ['sniper', { weapon: 'm110' }], ['knife', { weapon: 'knife' }], ['using', { using: true }], ['dead', { alive: false }],
 ];
 const rows = [0, 1].map(team => poses.map(() => { const v = new SoldierView(assets, team); r.scene.add(v.root, v.gun); return v; }));
 (window as any).__views = rows;

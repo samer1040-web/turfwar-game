@@ -4,7 +4,7 @@ import { loadMap, loadNav, mapDef } from '../maps/index';
 import type { MapDef } from '../maps/types';
 import { clamp, dist3, normalize3, segmentPointDistance, type Vec3 } from '../math';
 import { MOVE, createMoveState } from '../movement';
-import { BOBA, FALL, HEALTH, STAMINA, oneHanded, weaponStats, type AttachmentId, type Slot, type WeaponId } from '../weapons';
+import { BOBA, DEFAULT_WEAPONS, FALL, HEALTH, STAMINA, WEAPONS, oneHanded, weaponStats, type AttachmentId, type Slot, type WeaponId } from '../weapons';
 import { PHYSICS_STEP, stepBodies, type Body } from '../world';
 import { cleanSkin, isDefaultSkin } from '../skins';
 import { ROOKIE_ROUNDS, botName, createBrain, updateBot } from './bots';
@@ -55,7 +55,7 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
     id: state.nextId++, name: opts.name.slice(0, 20), team, bot: opts.bot,
     ...(!opts.bot && opts.rounds !== undefined && opts.rounds < ROOKIE_ROUNDS ? { rookieRounds: Math.max(0, Math.floor(opts.rounds)) } : {}),
     m: createMoveState(0, 0, 0), yaw: 0, pitch: 0, alive: false, health: 0, weapon: 0,
-    weapons: ['m4a1', 'm9a1'], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
+    weapons: [...DEFAULT_WEAPONS], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
     reloadLeft: 0, fireCooldown: 0, switchLeft: 0, grenades: 0, grenadeHE: false, smokes: 0, bobas: 0, molotovs: 0, slippers: 1, stamina: STAMINA.max, money: 0,
     sinceHit: 99, lastAttacker: -1, kills: 0, deaths: 0, assists: 0, score: 0, sprint: false, ads: false, sinceShot: 99, using: false,
     corrections: 0, moveSlack: MOVE_SLACK.max, groundY: 0, idle: 0, afk: 0, quiet: 0, round: newRoundStats(), roundsHere: 0,
@@ -291,14 +291,16 @@ export function useWeaponPickup(state: MatchState, ctx: SimContext, id: number, 
   if (!s || !pickup || !Number.isInteger(index) || !s.alive || state.phase === 'ended' || state.roundPhase === 'over'
     || seatOf(state, id) || !state.weaponPickups[index] || Math.abs(s.m.y - pickup.y) > WEAPON_PICKUP_HEIGHT_REACH
     || Math.hypot(s.m.x - pickup.x, s.m.z - pickup.z) > WEAPON_PICKUP_REACH) return false;
+  const slot = WEAPONS[pickup.weapon].slot;
+  if (slot === 2) return false;
   state.weaponPickups[index] = false;
   if (pickup.weapon === 'm110') s.attachments.m110 = { ...s.attachments.m110, optic: 'x6' };
-  s.weapons[0] = pickup.weapon;
+  s.weapons[slot] = pickup.weapon;
   if (!s.owned.includes(pickup.weapon)) s.owned.push(pickup.weapon);
   const stats = weaponStats(pickup.weapon, s.attachments[pickup.weapon]);
-  s.ammo[0] = stats.magazine;
-  s.reserve[0] = stats.reserve;
-  s.weapon = 0;
+  s.ammo[slot] = stats.magazine;
+  s.reserve[slot] = stats.reserve;
+  s.weapon = slot;
   s.reloadLeft = 0;
   s.switchLeft = stats.equipTime;
   return true;
@@ -374,15 +376,6 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
   resetVehicles(state, ctx);
   for (const s of state.soldiers) {
     s.round = newRoundStats();
-    
-    // ✅ الاختبار: إجبار اللاعب على حمل M4A1 في بداية كل جولة
-    if (!s.bot) {
-        s.weapons = ['m4a1', 'm9a1'];
-        s.owned = ['m4a1', 'm9a1'];
-        s.attachments = {}; 
-        s.weapon = 0;
-    }
-
     if (s.bot) botShop(s, ctx.random);
     refillAmmo(s);
     spawnSoldier(state, ctx, s);

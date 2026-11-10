@@ -9,7 +9,7 @@ import {
 import { eyeOf } from './match/combat';
 import { decodeFrame, encodeFrame } from './match/frame';
 import {
-  addSoldier, createContext, createMatch, enterVehicle, exitVehicle, fireShot, reportState, reportVehicle, resetMatch, seatOf, startRound,
+  addSoldier, buyItem, createContext, createMatch, enterVehicle, exitVehicle, fireShot, reportState, reportVehicle, resetMatch, seatOf, startRound,
   tickMatch, TICK_RATE,
 } from './match/sim';
 import { ELIMINATION, PRACTICE_CONFIG, vehicleTarget, type MatchConfig, type MatchEvent, type MatchState, type Soldier } from './match/state';
@@ -449,15 +449,17 @@ describe('vehicles in a match', () => {
     expect(enterVehicle(state, ctx, shooter.id, car)).toBe(false);
   });
 
-  it('a scooter rider shoots one-handed weapons through the validated fire path; car drivers still cannot', () => {
+  it('a scooter rider shoots a one-handed secondary through the validated fire path; car drivers still cannot', () => {
     const { ctx, state, events } = setup({ ...PRACTICE_CONFIG });
     const r = addSoldier(state, ctx, { name: 'Rider', team: 0, bot: false });
     const d = addSoldier(state, ctx, { name: 'Driver', team: 0, bot: false });
     const enemy = addSoldier(state, ctx, { name: 'Enemy', team: 1, bot: false });
     goLive(state, ctx);
     const scooter = taipeiSpot('scooter').index, car = taipeiSpot('car').index;
-    // Holding a rifle, the rider draws the sidearm on mounting.
+    // Holding a rifle, the rider draws the one-handed secondary on mounting.
     r.weapons[0] = 'm4a1'; r.weapon = 0;
+    expect(buyItem(state, ctx, r.id, 'mp7').ok).toBe(true);
+    r.weapon = 0;
     besides(state, ctx, r, scooter);
     expect(enterVehicle(state, ctx, r.id, scooter)).toBe(true);
     expect(r.weapon).toBe(1);
@@ -484,7 +486,7 @@ describe('vehicles in a match', () => {
     };
     const shotFrom = () => { const e = events.find(x => x.type === 'shot'); return e?.type === 'shot' ? e : undefined; };
     expect(ctx.world.lineOfSight(eye, { x: enemy.m.x, y: enemy.m.y + 1.2, z: enemy.m.z })).toBe(true);
-    // The pistol: a validated hit from the rider's eye.
+    // The MP7: a validated hit from the rider's eye.
     const health = enemy.health, ammo = r.ammo[1];
     events.splice(0);
     expect(fireShot(state, ctx, r.id, claim(1, eye))).toBe(true);

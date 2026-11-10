@@ -58,7 +58,6 @@ export const GUN_FIT: Record<WeaponId, GunFit> = {
   m110: { grip: [0.005, 0, 0], fore: [-0.4, -0.04, 0], muzzle: [-0.935, 0.05, 0], mag: [-0.266, -0.01, 0], magModel: 'Gun_SMG_Ammo', irons: 0.095, optic: -0.155, bore: 0.95, rail: [-0.44, 0.022, 0.024], clip: { at: [-0.266, -0.026, 0], tilt: 0, w: 0.078, d: 0.022 }, butt: [0.312, -0.045, 0.17], kind: 'long' },
   m249: { grip: [0.005, 0, 0], fore: [-0.42, 0.12, 0], muzzle: [-1.02, 0.18, 0], mag: [-0.24, -0.08, 0], irons: 0.279, optic: 0, bore: 1.25, rail: [-0.56, 0.17, 0.04], clip: { at: [-0.23, -0.125, 0.045], tilt: 0, w: 0.14, d: 0.1 }, butt: [0.372, 0.1, 0.16], kind: 'long' },
   m1014: { grip: [0.025, -0.02, 0], fore: [-0.45, 0.0, 0], muzzle: [-0.79, 0.052, 0], mag: [-0.4, 0.0, 0], irons: 0.082, optic: -0.15, bore: 1.15, rail: [-0.55, 0.03, 0.026], clip: { at: [-0.71, 0.0, 0], tilt: 0, w: 0.05, d: 0.03, tube: true }, butt: [0.29, -0.05, 0.1], kind: 'long' },
-  m9a1: { grip: [0.005, 0, 0], fore: [0.02, -0.05, 0.03], muzzle: [-0.295, 0.135, 0], mag: [0.025, -0.074, 0], irons: 0.174, optic: -0.05, bore: 0.62, rail: [-0.205, 0.064, 0], clip: { at: [0.02, -0.082, 0], tilt: 0.28, w: 0.042, d: 0.026 }, kind: 'pistol' },
 };
 export const vec = (v: V, out = new THREE.Vector3()) => out.set(v[0], v[1], v[2]);
 
@@ -73,7 +72,6 @@ const FINISHES: Record<WeaponId, Finish> = {
   m110: { body: 0x3a3833, dark: 0x2a2b2c, accent: 0x85775a },                              // flat-dark-earth stock, black steel
   m249: { body: 0x3c4236, dark: 0x1c1e1a, accent: 0x5d6352 },                              // parkerized olive
   m1014: { body: 0x1e2023, dark: 0x2c2e31, accent: 0x8d939a, metal: 0.55 },                // black, bright bolt
-  m9a1: { body: 0x2a2c30, dark: 0x141516, accent: 0x303236, wood: 0x1f2022, metal: 0.6 },  // black slide and grips
 };
 const ROLE: Record<string, keyof Finish> = {
   Main: 'body', Metal: 'body', Grey: 'body', Green: 'body',
@@ -336,7 +334,6 @@ const IRONS: Partial<Record<WeaponId, IronFit>> = {
   mp5: { rear: [0.012, 0.143], front: [-0.312, 0.143], line: 0.157, rearKind: 'aperture', frontKind: 'hood' },
   mp7: { rear: [0.02, 0.134], front: [-0.262, 0.134], line: 0.153, rearKind: 'aperture', frontKind: 'hood' },
   m1014: { rear: [-0.045, 0.085], front: [-0.675, 0.068], line: 0.102, rearKind: 'ghost', frontKind: 'bead' },
-  m9a1: { rear: [0.03, 0.159], front: [-0.252, 0.158], line: 0.172, rearKind: 'notch', frontKind: 'blade' },
 };
 
 /**
@@ -873,4 +870,3 @@ export function applyOptics(weapons: Map<string, THREE.Object3D>) {
     if (model) refinish(model, { body: 0x1d1f22, dark: 0x141517, accent: 0x34373b, metal: 0.55 });
   }
 }
-

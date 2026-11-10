@@ -182,6 +182,8 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m1014', -10.9, keepRoof, -11);
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
+  b.weaponPickup('m110', -52, b.ground(-52, 0), 0);
+  b.weaponPickup('m110', 52, b.ground(52, 0), 0);
 
   return b.build();
 }

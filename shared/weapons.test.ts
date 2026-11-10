@@ -6,11 +6,11 @@ import {
 const all = Object.values(WEAPONS);
 
 describe('BeGone roster', () => {
-  it('has exactly the BeGone weapons with real names and their store prices', () => {
-    expect([...WEAPON_IDS].sort()).toEqual(['knife', 'm1014', 'm110', 'm249', 'm4a1', 'm9a1', 'mp5', 'mp7']);
+  it('has the game weapons with real names and their store prices', () => {
+    expect([...WEAPON_IDS].sort()).toEqual(['knife', 'm1014', 'm110', 'm249', 'm4a1', 'mp5', 'mp7']);
     const prices = Object.fromEntries(all.map(w => [w.id, w.price]));
-    expect(prices).toMatchObject({ mp5: 0, m9a1: 0, knife: 0, m4a1: 3400, m1014: 2800, m110: 4000, m249: 3800, mp7: 1800 });
-    expect(DEFAULT_WEAPONS).toEqual(['mp5', 'm9a1']);
+    expect(prices).toMatchObject({ mp5: 0, knife: 0, m4a1: 3400, m1014: 2800, m110: 4000, m249: 3800, mp7: 1800 });
+    expect(DEFAULT_WEAPONS).toEqual(['m4a1', 'm110']);
   });
 
   it('every weapon is complete and in its slot', () => {
@@ -19,7 +19,7 @@ describe('BeGone roster', () => {
       expect(w.interval).toBeGreaterThan(0);
       expect(w.botRange).toBeGreaterThan(0);
       expect(w.pellets).toBeGreaterThanOrEqual(1);
-      expect(w.slot).toBe(w.class === 'melee' ? 2 : w.class === 'pistol' || w.id === 'mp7' ? 1 : 0);
+      expect(w.slot).toBe(w.class === 'melee' ? 2 : w.id === 'm110' || w.id === 'mp7' ? 1 : 0);
       if (w.slot !== 2) { expect(w.magazine).toBeGreaterThan(0); expect(w.reload).toBeGreaterThan(0); }
     }
   });
@@ -27,6 +27,12 @@ describe('BeGone roster', () => {
   it('damage by zone matches BeGone (MP5 30/18/12, M110 90 to the head)', () => {
     expect([zoneDamage(WEAPONS.mp5, 'head'), zoneDamage(WEAPONS.mp5, 'body'), zoneDamage(WEAPONS.mp5, 'legs')]).toEqual([30, 18, 12]);
     expect(zoneDamage(WEAPONS.m110, 'head')).toBeGreaterThanOrEqual(HEALTH.max * 0.9);
+  });
+
+  it('keeps the requested M4A1 and M110 in separate loadout slots', () => {
+    expect(WEAPONS[DEFAULT_WEAPONS[0]].slot).toBe(0);
+    expect(WEAPONS[DEFAULT_WEAPONS[1]].slot).toBe(1);
+    expect(WEAPONS.m110.class).toBe('sniper');
   });
 
   it('time to kill on the body stays between a quarter second and two seconds', () => {
