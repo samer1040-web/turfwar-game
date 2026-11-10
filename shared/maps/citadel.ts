@@ -183,10 +183,14 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
 
-  // ✅ وضع رشاش M249 في قاعدتك وقاعدة الخصم
-  const spawnY = b.ground(-54, 0);
-  b.weaponPickup('m249', -54, spawnY, 0); // قاعدتك
-  b.weaponPickup('m249', 54, spawnY, 0);  // قاعدة الخصم
+  // ✅ نسخ طريقة السطح بالضبط: إحداثيات مطلقة وبعيدة عن الدرع ولوحة الانطلاق
+  // وضع القناص (m110) عند قاعدة اللاعب الأول (X = -54)
+  const groundY1 = b.ground(-54, 2);
+  b.weaponPickup('m110', -54, groundY1, 2);
+
+  // وضع القناص (m110) عند قاعدة اللاعب الثاني (X = 54)
+  const groundY2 = b.ground(54, 2);
+  b.weaponPickup('m110', 54, groundY2, 2);
 
   return b.build();
 }
