@@ -26,8 +26,9 @@ export type { SimContext } from './combat';
 
 /** Metres from a bomb site's centre within which it can be armed or disarmed. */
 export const BOMB_REACH = 3.5;
-export const WEAPON_PICKUP_REACH = 3.25;
-export const WEAPON_PICKUP_HEIGHT_REACH = 2.2;
+// ✅ تم تعديل المسافات هنا لتصبح كبيرة جداً لكي يسمح بالتقاط أي سلاح في القاعدة
+export const WEAPON_PICKUP_REACH = 15.0;
+export const WEAPON_PICKUP_HEIGHT_REACH = 10.0;
 
 /** Build a simulation context. `withNav` is needed only where bots are simulated. */
 export function createContext(mapId: string, random: () => number, emit: (e: MatchEvent) => void, withNav = true): SimContext {
@@ -289,11 +290,17 @@ export function useAmmoCrate(state: MatchState, ctx: SimContext, id: number, ind
 export function useWeaponPickup(state: MatchState, ctx: SimContext, id: number, index: number) {
   const s = state.soldiers.find(x => x.id === id);
   const pickup = ctx.map.weaponPickups?.[index];
+  
+  // ✅ هنا أصبحت المسافات المسموحة أكبر (15 متراً أفقياً و 10 أمتار عمودياً) لكي يلتقط من أي مكان في القاعدة
   if (!s || !pickup || !Number.isInteger(index) || !s.alive || state.phase === 'ended' || state.roundPhase === 'over'
     || seatOf(state, id) || !state.weaponPickups[index] || Math.abs(s.m.y - pickup.y) > WEAPON_PICKUP_HEIGHT_REACH
     || Math.hypot(s.m.x - pickup.x, s.m.z - pickup.z) > WEAPON_PICKUP_REACH) return false;
+
   state.weaponPickups[index] = false;
+  
+  // ✅ هنا السيرفر يعطيك الإسكوب (x6) مع القناص فور التقاطه!
   if (pickup.weapon === 'm110') s.attachments.m110 = { ...s.attachments.m110, optic: 'x6' };
+  
   s.weapons[0] = pickup.weapon;
   if (!s.owned.includes(pickup.weapon)) s.owned.push(pickup.weapon);
   const stats = weaponStats(pickup.weapon, s.attachments[pickup.weapon]);
@@ -459,7 +466,6 @@ function checkRoundEnd(state: MatchState, ctx: SimContext) {
 function timeOut(state: MatchState, ctx: SimContext) {
   if (state.config.practice) { state.phaseLeft = state.config.roundTime; return; }
   
-  // 👇 التعديل الجديد: الفوز بالأعلى صحة عند انتهاء الوقت 👇
   if (modeOf(state, ctx.map) !== 'sabotage') { 
     let team0Health = 0;
     let team1Health = 0;
@@ -473,12 +479,10 @@ function timeOut(state: MatchState, ctx: SimContext) {
     let winner: -1 | Team = -1;
     if (team0Health > team1Health) winner = 0;
     else if (team1Health > team0Health) winner = 1;
-    // إذا تساوت الصحة، يظل التعادل (-1)
 
     endRound(state, ctx, winner, 'time'); 
     return; 
   }
-  // 👆 نهاية التعديل 👆
 
   if (state.bomb.armed) {
     const p = ctx.map.points.find(x => x.id === ctx.map.sabotage!.sites[state.bomb.site])!;

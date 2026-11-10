@@ -183,20 +183,20 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
 
-  // ✅ وضع الأسلحة خارج الدرع تماماً، على العشب أمام اللاعب (إحداثيات مطلقة)
-  const groundY = b.ground(-52, 0);
+  // ✅ الحل الجذري: نرفع السلاح متراً واحداً فوق الأرض (+ 1.0) لكي لا يتداخل مع أي مجسم
+  const groundY = b.ground(-54, 0) + 1.0; 
   
   // أسلحة قاعدة اللاعب الأول (الفريق الأول)
-  b.weaponPickup('m4a1', -52, groundY, -3);
-  b.weaponPickup('m1014', -52, groundY, 0);
-  b.weaponPickup('m249', -52, groundY, 3);
-  b.weaponPickup('m110', -52, groundY, 6);
+  b.weaponPickup('m4a1', -54, groundY, -3);
+  b.weaponPickup('m1014', -54, groundY, 0);
+  b.weaponPickup('m249', -54, groundY, 3);
+  b.weaponPickup('m110', -54, groundY, 6);
 
   // أسلحة قاعدة اللاعب الثاني (الفريق الثاني)
-  b.weaponPickup('m4a1', 52, groundY, -3);
-  b.weaponPickup('m1014', 52, groundY, 0);
-  b.weaponPickup('m249', 52, groundY, 3);
-  b.weaponPickup('m110', 52, groundY, 6);
+  b.weaponPickup('m4a1', 54, groundY, -3);
+  b.weaponPickup('m1014', 54, groundY, 0);
+  b.weaponPickup('m249', 54, groundY, 3);
+  b.weaponPickup('m110', 54, groundY, 6);
 
   return b.build();
 }
