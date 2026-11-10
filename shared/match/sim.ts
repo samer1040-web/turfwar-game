@@ -62,10 +62,9 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
   };
   resetInventory(s);
   
-  // ✅ إجبار السيرفر على إعطاء القناص مع السكوب لمنع التجمد
+  // ✅ إجبار السيرفر على إعطاء القناص لأي لاعب يدخل أي غرفة (بدون فرض إسكوب)
   s.weapons = [...DEFAULT_WEAPONS];
   s.owned = [...DEFAULT_WEAPONS];
-  s.attachments = { m110: { optic: 'x6' } };
   s.weapon = 0;
   
   refillAmmo(s);
@@ -138,6 +137,7 @@ export function reportState(state: MatchState, ctx: SimContext, id: number, r: C
   s.yaw = r.yaw; s.pitch = clamp(r.pitch, -1.5, 1.5);
   if (!s.alive) return true;
 
+  // ✅ حماية من تجاوز العميل في أول ثانية
   const justStarted = state.roundPhase === 'freeze' && state.roundClock < 1;
 
   if (seated) {
@@ -381,11 +381,10 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
   for (const s of state.soldiers) {
     s.round = newRoundStats();
     
-    // ✅ إجبار اللاعب على حمل القناص (m110) مع الإسكوب (x6) في بداية كل جولة لمنع التجمد
+    // ✅ إجبار اللاعب على حمل القناص (m110) في بداية كل جولة (بدون إجبار إسكوب معين)
     if (!s.bot) {
         s.weapons = [...DEFAULT_WEAPONS];
         s.owned = [...DEFAULT_WEAPONS];
-        s.attachments = { m110: { optic: 'x6' } };
         s.weapon = 0;
     }
 
