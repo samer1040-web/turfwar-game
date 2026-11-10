@@ -130,9 +130,13 @@ export function reportState(state: MatchState, ctx: SimContext, id: number, r: C
   if (reportActs(state, s, r, seated)) noteAction(s);
   s.yaw = r.yaw; s.pitch = clamp(r.pitch, -1.5, 1.5);
   if (!s.alive) return true;
+
+  // ✅ إضافة شرط حماية: تجاهل سلاح العميل في أول ثانية من الجولة
+  const justStarted = state.roundPhase === 'freeze' && state.roundClock < 1;
+
   if (seated) {
     s.ads = r.ads; s.using = false;
-    if (r.weapon !== s.weapon) switchWeapon(state, id, r.weapon);
+    if (r.weapon !== s.weapon && !justStarted) switchWeapon(state, id, r.weapon);
     return true;
   }
   const dt = clamp(elapsed, 0, 0.5);
@@ -168,7 +172,10 @@ export function reportState(state: MatchState, ctx: SimContext, id: number, r: C
   s.m.crouch = clamp(r.crouch, 0, 1); s.m.grounded = r.grounded && !airborne;
   s.sprint = r.sprint; s.ads = r.ads; s.using = !!r.use;
   s.m.slideTime = r.slide ? Math.max(s.m.slideTime, 0.2) : 0;
-  if (r.weapon !== s.weapon) switchWeapon(state, id, r.weapon);
+  
+  // ✅ تطبيق شرط الحماية هنا أيضاً
+  if (r.weapon !== s.weapon && !justStarted) switchWeapon(state, id, r.weapon);
+  
   if (landing > FALL.safe) applyDamage(state, ctx, s, s.id, (landing - FALL.safe) * FALL.perMs, 'fall', s.m, 'fall');
   return true;
 }
@@ -369,12 +376,11 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
   for (const s of state.soldiers) {
     s.round = newRoundStats();
     
-    // ✅ إجبار اللاعب على حمل القناص والإسكوب في بداية كل جولة
+    // ✅ إجبار اللاعب على حمل القناص والإسكوب في بداية كل جولة (حتى لو كان السيرفر يحتفظ بسلاح قديم)
     if (!s.bot) {
         s.weapons = ['m110', 'm9a1'];
-        s.attachments.m110 = { optic: 'x6' };
-        if (!s.owned.includes('m110')) s.owned.push('m110');
-        if (!s.owned.includes('m9a1')) s.owned.push('m9a1');
+        s.owned = ['m110', 'm9a1'];
+        s.attachments = { m110: { optic: 'x6' } };
         s.weapon = 0;
     }
 
