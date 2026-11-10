@@ -33,7 +33,7 @@ const BASE: Record<WeaponId, Base> = {
 };
 
 export const WEAPON_IDS = Object.keys(BASE) as WeaponId[];
-// ✅ القناص هو السلاح الأساسي، والمسدس هو الثانوي
+// ✅ جعل القناص هو السلاح الأساسي والمسدس هو الثانوي
 export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['m110', 'm9a1'];
 
 export type AttachmentCategory = 'optic' | 'muzzle' | 'laser' | 'light' | 'counter' | 'magazine' | 'stock' | 'ammo';
@@ -159,8 +159,8 @@ export const oneHanded = (w: Pick<WeaponDef, 'class'>) => w.class === 'pistol' |
 export const RIDER_AIM = { spread: 1.6, recoil: 1.3 };
 
 export function weaponStats(id: WeaponId, attachments: Attachments = {}): WeaponDef {
-  // إعطاء القناص إسكوب x6 افتراضي فقط إذا لم يكن هناك إسكوب آخر
   const finalAttachments = { ...attachments };
+  // إعطاء القناص إسكوب x6 افتراضي فقط إذا لم يكن هناك إسكوب آخر
   if (id === 'm110' && !finalAttachments.optic) {
     finalAttachments.optic = 'x6';
   }
