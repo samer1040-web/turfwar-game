@@ -891,7 +891,7 @@ function updateRoomHour(ctx: Ctx, change: (h: RoomHour | undefined) => RoomHour)
   const hour = hourOf(micros(ctx));
   const prev = ctx.db.roomHour.hour.find(hour);
   const row = { hour, ...change(prev ?? undefined) };
-  if (prev) ctx.db.roomHour.hour.update(row); else ctx.db.roomHour.hour.insert(row);
+  if (prev) ctx.db.roomHour.hour.update(row); else ctx.db.roomHour.insert(row);
 }
 const countRoom = (ctx: Ctx, kind: 'joins' | 'leaves' | 'drops' | 'kicks') => updateRoomHour(ctx, h => countRoomEvent(h, kind));
 /** One more AFK kick this hour (`afk_hour`). */
