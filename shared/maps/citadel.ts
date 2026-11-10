@@ -156,8 +156,7 @@ export function citadelKeep(): MapDef {
       b.spawn(0, SX + x, sy, z, -Math.PI / 2);
     }
     
-    // ✅ القناص هنا: في نفس المكان الذي نجح فيه m4a1
-    b.weaponPickup('m110', SX + 2, sy, 6);
+    // (تم حذف القناص من الأرض لحماية اللعبة من الانهيار)
 
     b.raw({ kind: 'spawnPad', team: b.team(0), ...b.at(SX - 1, 0), y: sy, rotY: b.rotation(-Math.PI / 2) });
     b.light(SX - 2, sy + 4.5, 0, b.mirroredSide ? 0xff5a4a : 0x58b6ff, 8, 20);
