@@ -50,8 +50,8 @@ const BASE: Record<WeaponId, Base> = {
 };
 
 export const WEAPON_IDS = Object.keys(BASE) as WeaponId[];
-/** What every soldier carries at the start of a match: MP5, M9A1 and the knife. */
-export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['mp5', 'm9a1'];
+/** What every soldier carries at the start of a match: M4A1 in hand, M110 in reserve. */
+export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['m4a1', 'm110'];
 
 // ---- Attachments ---------------------------------------------------------------------------
 
@@ -205,12 +205,18 @@ export const RIDER_AIM = { spread: 1.6, recoil: 1.3 };
 
 /** Stats of `id` with its fitted attachments (cached). Iron sights count when no optic is fitted. */
 export function weaponStats(id: WeaponId, attachments: Attachments = {}): WeaponDef {
-  const key = `${id}|${attachKey(attachments)}`;
+  // ✅ إجبار القناص على امتلاك إسكوب x6 بشكل افتراضي
+  const finalAttachments = { ...attachments };
+  if (id === 'm110' && !finalAttachments.optic) {
+    finalAttachments.optic = 'x6';
+  }
+
+  const key = `${id}|${attachKey(finalAttachments)}`;
   let w = cache.get(key);
   if (w) return w;
   const b = BASE[id];
   const d = { ...ZERO };
-  const fitted = { ...attachments };
+  const fitted = { ...finalAttachments };
   if (b.class !== 'melee') fitted.optic ??= 'irons';
   for (const aid of Object.values(fitted)) {
     if (!aid) continue;
@@ -220,7 +226,7 @@ export function weaponStats(id: WeaponId, attachments: Attachments = {}): Weapon
     const over = { ...a.per?.[b.class], ...a.per?.[id] };
     for (const k of Object.keys(ZERO) as (keyof Delta)[]) d[k] += (over[k] ?? a.delta[k] ?? 0);
   }
-  w = derive(b, d, attachments);
+  w = derive(b, d, finalAttachments);
   cache.set(key, w);
   return w;
 }

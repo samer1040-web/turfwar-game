@@ -26,7 +26,6 @@ export type { SimContext } from './combat';
 
 /** Metres from a bomb site's centre within which it can be armed or disarmed. */
 export const BOMB_REACH = 3.5;
-// ✅ تم تعديل المسافات هنا لتصبح كبيرة جداً لكي يسمح بالتقاط أي سلاح في القاعدة
 export const WEAPON_PICKUP_REACH = 15.0;
 export const WEAPON_PICKUP_HEIGHT_REACH = 10.0;
 
@@ -61,7 +60,7 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
     id: state.nextId++, name: opts.name.slice(0, 20), team, bot: opts.bot,
     ...(!opts.bot && opts.rounds !== undefined && opts.rounds < ROOKIE_ROUNDS ? { rookieRounds: Math.max(0, Math.floor(opts.rounds)) } : {}),
     m: createMoveState(0, 0, 0), yaw: 0, pitch: 0, alive: false, health: 0, weapon: 0,
-    weapons: ['mp5', 'm9a1'], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
+    weapons: ['m4a1', 'm110'], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
     reloadLeft: 0, fireCooldown: 0, switchLeft: 0, grenades: 0, grenadeHE: false, smokes: 0, bobas: 0, molotovs: 0, slippers: 1, stamina: STAMINA.max, money: 0,
     sinceHit: 99, lastAttacker: -1, kills: 0, deaths: 0, assists: 0, score: 0, sprint: false, ads: false, sinceShot: 99, using: false,
     corrections: 0, moveSlack: MOVE_SLACK.max, groundY: 0, idle: 0, afk: 0, quiet: 0, round: newRoundStats(), roundsHere: 0,
@@ -290,17 +289,11 @@ export function useAmmoCrate(state: MatchState, ctx: SimContext, id: number, ind
 export function useWeaponPickup(state: MatchState, ctx: SimContext, id: number, index: number) {
   const s = state.soldiers.find(x => x.id === id);
   const pickup = ctx.map.weaponPickups?.[index];
-  
-  // ✅ هنا أصبحت المسافات المسموحة أكبر (15 متراً أفقياً و 10 أمتار عمودياً) لكي يلتقط من أي مكان في القاعدة
   if (!s || !pickup || !Number.isInteger(index) || !s.alive || state.phase === 'ended' || state.roundPhase === 'over'
     || seatOf(state, id) || !state.weaponPickups[index] || Math.abs(s.m.y - pickup.y) > WEAPON_PICKUP_HEIGHT_REACH
     || Math.hypot(s.m.x - pickup.x, s.m.z - pickup.z) > WEAPON_PICKUP_REACH) return false;
-
   state.weaponPickups[index] = false;
-  
-  // ✅ هنا السيرفر يعطيك الإسكوب (x6) مع القناص فور التقاطه!
   if (pickup.weapon === 'm110') s.attachments.m110 = { ...s.attachments.m110, optic: 'x6' };
-  
   s.weapons[0] = pickup.weapon;
   if (!s.owned.includes(pickup.weapon)) s.owned.push(pickup.weapon);
   const stats = weaponStats(pickup.weapon, s.attachments[pickup.weapon]);
