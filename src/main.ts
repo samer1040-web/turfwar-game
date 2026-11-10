@@ -1910,11 +1910,13 @@ async function boot() {
         if (state && me && !opponentLeftHandled) {
           const myScore = state.scores[me.team] || 0;
           const oppScore = state.scores[1 - me.team] || 0;
-          const totalRounds = myScore + oppScore;
-          
-          const isMatchOver = state.phase === 'ended';
           const timeSinceStart = Date.now() - matchStartTime;
           const opponentLeft = state.soldiers.length === 1 && timeSinceStart > 10000;
+
+          // 🔥 إصلاح انتهاء المباراة قبل الوصول لـ 6 قتلات
+          const killsToWin = state.config.killsToWin ?? 6;
+          const someoneWon = myScore >= killsToWin || oppScore >= killsToWin;
+          const isMatchOver = state.phase === 'ended' && someoneWon;
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
@@ -1927,7 +1929,7 @@ async function boot() {
             let color = "";
 
             if (opponentLeft && !isMatchOver) {
-                if (totalRounds >= 3) {
+                if (myScore >= 3) {
                     isWin = true;
                     title = "Congratulations, you won! 🏆";
                     msg = "Your opponent left the game.";
@@ -1941,12 +1943,12 @@ async function boot() {
             } else if (state.winner === me.team) {
                 isWin = true;
                 title = "Congratulations, you won! 🏆";
-                msg = `Kills to win: ${state.config.killsToWin ?? 6}`;
+                msg = `Kills to win: ${killsToWin}`;
                 color = "#f59e0b";
             } else if (state.winner === 1 - me.team) {
                 isWin = false;
                 title = "You lost 😢";
-                msg = `Kills to win: ${state.config.killsToWin ?? 6}`;
+                msg = `Kills to win: ${killsToWin}`;
                 color = "#ef4444";
             } else {
                 isDraw = true;
@@ -1960,8 +1962,10 @@ async function boot() {
             const userEmailParam = urlParams.get('email');
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
-            const returnUrl = isTelegramPlatform ? 'https://t.me/LootEarnGames_bot' : window.location.origin;
-            const returnLabel = isTelegramPlatform ? 'العودة للبوت' : t('hud.leaveMatch');
+            
+            // 🔥 إصلاح زر العودة ليذهب لصالة الألعاب بدلاً من إغلاق التطبيق
+            const returnUrl = isTelegramPlatform ? 'https://lootearn.top/' : window.location.origin;
+            const returnLabel = isTelegramPlatform ? 'العودة لصالة الألعاب' : t('hud.leaveMatch');
 
             if (isWin && userEmailParam) {
                 if (isTelegramPlatform) {
@@ -1998,12 +2002,10 @@ async function boot() {
             
             document.body.appendChild(winOverlay);
             
-                        document.getElementById('win-close')!.addEventListener('click', () => {
+            document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              window.close();
-              setTimeout(() => {
-                window.location.href = returnUrl;
-              }, 300);
+              // window.close(); // 🔥 تم إزالة أمر الإغلاق ليبقى داخل التطبيق
+              window.location.href = returnUrl;
             });
             
             return;
