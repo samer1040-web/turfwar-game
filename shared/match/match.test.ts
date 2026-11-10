@@ -645,6 +645,10 @@ describe('store and cash', () => {
     // Gadgets stack: a laser, a flashlight and a suppressor together, the optic kept.
     for (const id of ['laser', 'flashlight', 'suppressor'] as const) expect(buyAttachmentFor(state, a.id, 'm4a1', id).ok).toBe(true);
     expect(a.attachments.m4a1).toMatchObject({ optic: 'holo', laser: 'laser', light: 'flashlight', muzzle: 'suppressor', magazine: 'extendedClip' });
+    a.money = 0;
+    expect(buyAttachmentFor(state, a.id, 'm110', 'x4').ok).toBe(true);
+    expect(a.attachments.m110?.optic).toBe('x4');
+    expect(a.money).toBe(0);
   });
 
   it('the M67 is limited to one and High Explosive is an upgrade', () => {

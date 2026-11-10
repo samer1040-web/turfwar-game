@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Assets } from '../assets';
-import { ATTACHMENT_SLOTS, BOBA, WEAPONS, WEAPON_IDS, type Attachments, type WeaponId } from '../../shared/weapons';
+import { ATTACHMENT_SLOTS, BOBA, WEAPONS, WEAPON_IDS, weaponStats, type Attachments, type WeaponId } from '../../shared/weapons';
 import type { LocalPlayer } from '../game/player';
 import { curlFingers, orientHand, restorePose, sampleKeys, solveArm, type Bones, type Ease, type Keyframe } from './rig';
 import { GUN_FIT, fitAttachments, overlayFor, vec, type Fitted, type Overlay } from './optics';
@@ -233,10 +233,11 @@ export class ViewModel {
 
   /** Show weapon `id` with its fitted attachments (rebuilt when they change). */
   setWeapon(id: WeaponId, attachments: Attachments = {}, instant = false) {
-    const key = `${id}|${ATTACHMENT_SLOTS.map(c => attachments[c] ?? '').join('|')}`;
+    const fittedAttachments = weaponStats(id, attachments).attachments;
+    const key = `${id}|${ATTACHMENT_SLOTS.map(c => fittedAttachments[c] ?? '').join('|')}`;
     let fit = this.fitted.get(key);
     if (!fit) {
-      fit = fitAttachments(this.assets.weapons, id, attachments, 'first');
+      fit = fitAttachments(this.assets.weapons, id, fittedAttachments, 'first');
       fit.group.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = false; m.frustumCulled = false; } });
       this.fitted.set(key, fit);
     }
@@ -244,13 +245,13 @@ export class ViewModel {
     this.models.get(this.current)!.visible = false;
     if (id !== this.current && !instant) this.equipT = 0;
     this.current = id;
-    this.attachments = attachments;
+    this.attachments = fittedAttachments;
     this.fit = fit;
     const model = this.models.get(id)!;
     model.visible = true;
     model.add(fit.group);
     this.flash.position.copy(toGun(fit.muzzle));
-    this.overlay = overlayFor({ ...WEAPONS[id], attachments });
+    this.overlay = overlayFor({ ...WEAPONS[id], attachments: fittedAttachments });
     this.slashT = 1;
   }
 

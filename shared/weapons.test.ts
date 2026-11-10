@@ -33,6 +33,7 @@ describe('BeGone roster', () => {
     expect(WEAPONS[DEFAULT_WEAPONS[0]].slot).toBe(0);
     expect(WEAPONS[DEFAULT_WEAPONS[1]].slot).toBe(1);
     expect(WEAPONS.m110.class).toBe('sniper');
+    expect(weaponStats('m110', {}).attachments.optic).toBe('x6');
   });
 
   it('time to kill on the body stays between a quarter second and two seconds', () => {
@@ -58,6 +59,9 @@ describe('attachments', () => {
       const a = ATTACHMENTS[id];
       expect(ATTACHMENT_SLOTS).toContain(a.category);
       expect(WEAPON_IDS.some(w => w !== 'knife' && fitsWeapon(a, w)), id).toBe(true);
+    }
+    for (const a of Object.values(ATTACHMENTS).filter(a => a.category === 'optic')) {
+      expect(a.price, a.id).toBe(0);
     }
   });
 

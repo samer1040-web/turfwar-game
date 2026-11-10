@@ -58,11 +58,11 @@ export interface AttachmentDef {
 
 export const ATTACHMENTS: Record<AttachmentId, AttachmentDef> = {
   irons: { id: 'irons', name: 'Iron Sight', category: 'optic', price: 0, delta: { zoomAccuracy: 1 } },
-  reflex: { id: 'reflex', name: 'Reflex Sight', category: 'optic', price: 800, delta: { zoomFov: -2, zoomAccuracy: 1.5, move: -1 }, per: { sniper: { zoomAccuracy: 1.4 } } },
-  holo: { id: 'holo', name: 'Holographic Sight', category: 'optic', price: 1000, delta: { zoomFov: -4, zoomAccuracy: 2, move: -1 }, per: { sniper: { zoomAccuracy: 1.6 } } },
-  acog: { id: 'acog', name: 'ACOG Scope', category: 'optic', price: 1100, delta: { zoomFov: -8, zoomAccuracy: 2.5, move: -1 }, per: { sniper: { zoomAccuracy: 1.8 }, mp5: { zoomRecoil: -0.3 } } },
-  x4: { id: 'x4', name: 'Zoom x4 Scope', category: 'optic', price: 600, delta: { zoomFov: -10, zoomAccuracy: 3, move: -1 }, only: ['m110'] },
-  x6: { id: 'x6', name: 'Zoom x6 Scope', category: 'optic', price: 1200, delta: { zoomFov: -12, zoomAccuracy: 2, move: -2 }, only: ['m110'] },
+  reflex: { id: 'reflex', name: 'Reflex Sight', category: 'optic', price: 0, delta: { zoomFov: -2, zoomAccuracy: 1.5, move: -1 }, per: { sniper: { zoomAccuracy: 1.4 } } },
+  holo: { id: 'holo', name: 'Holographic Sight', category: 'optic', price: 0, delta: { zoomFov: -4, zoomAccuracy: 2, move: -1 }, per: { sniper: { zoomAccuracy: 1.6 } } },
+  acog: { id: 'acog', name: 'ACOG Scope', category: 'optic', price: 0, delta: { zoomFov: -8, zoomAccuracy: 2.5, move: -1 }, per: { sniper: { zoomAccuracy: 1.8 }, mp5: { zoomRecoil: -0.3 } } },
+  x4: { id: 'x4', name: 'Zoom x4 Scope', category: 'optic', price: 0, delta: { zoomFov: -10, zoomAccuracy: 3, move: -1 }, only: ['m110'] },
+  x6: { id: 'x6', name: 'Zoom x6 Scope', category: 'optic', price: 0, delta: { zoomFov: -12, zoomAccuracy: 2, move: -2 }, only: ['m110'] },
   ammoCounter: { id: 'ammoCounter', name: 'Ammo Counter', category: 'counter', price: 200, delta: {} },
   laser: { id: 'laser', name: 'Laser Sight', category: 'laser', price: 800, delta: { accuracy: 1.5 } },
   flashlight: { id: 'flashlight', name: 'Flashlight', category: 'light', price: 600, delta: { recoil: 2, zoomRecoil: 1 } },

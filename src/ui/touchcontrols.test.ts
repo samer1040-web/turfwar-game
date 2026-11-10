@@ -57,15 +57,16 @@ describe('touch use action', () => {
 });
 
 describe('M110 touch scope selector', () => {
-  it('offers every M110 optic and marks unaffordable choices', () => {
+  it('offers every M110 optic and marks the equipped one', () => {
     const options = sniperScopeOptions('x6', 0, false);
 
     expect(options.map(option => option.id)).toEqual(['reflex', 'holo', 'acog', 'x4', 'x6']);
     expect(options.find(option => option.id === 'x6')).toMatchObject({ equipped: true, disabled: true });
-    expect(options.find(option => option.id === 'x4')).toMatchObject({ equipped: false, disabled: true, price: 600 });
+    expect(options.find(option => option.id === 'x4')).toMatchObject({ equipped: false, disabled: false, price: 0 });
+    expect(options.filter(option => !option.disabled).every(option => option.price === 0)).toBe(true);
   });
 
-  it('allows fitting any unmounted optic in free-buy mode', () => {
+  it('allows fitting every unmounted optic for free', () => {
     const options = sniperScopeOptions('x6', 0, true);
 
     expect(options.filter(option => !option.disabled).map(option => option.id)).toEqual(['reflex', 'holo', 'acog', 'x4']);

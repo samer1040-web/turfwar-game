@@ -19,7 +19,8 @@ describe('store purchases for analytics', () => {
     expect(purchaseOf({ kind: 'item', item: 'grenade' }, base, { ...base, grenades: 1 }, false)).toEqual({ item: 'grenade', price: GRENADE.price });
     expect(purchaseOf({ kind: 'item', item: 'smoke' }, base, { ...base, smokes: 1 }, false)).toEqual({ item: 'smoke', price: SMOKE.price });
     expect(purchaseOf({ kind: 'item', item: 'smoke' }, base, base, false)).toBeUndefined();
-    expect(purchaseOf({ kind: 'attach', weapon: 'mp5', attachment: 'reflex' }, base, { ...base, attachments: { mp5: { optic: 'reflex' } } }, false)).toEqual({ item: 'mp5:reflex', price: 800 });
+    expect(purchaseOf({ kind: 'attach', weapon: 'mp5', attachment: 'reflex' }, base, { ...base, attachments: { mp5: { optic: 'reflex' } } }, false)).toEqual({ item: 'mp5:reflex', price: 0 });
+    expect(purchaseOf({ kind: 'attach', weapon: 'mp5', attachment: 'suppressor' }, base, { ...base, attachments: { mp5: { muzzle: 'suppressor' } } }, false)).toEqual({ item: 'mp5:suppressor', price: 1100 });
     expect(purchaseOf({ kind: 'attach', weapon: 'mp5', attachment: 'irons' }, base, base, false)).toBeUndefined();
   });
 });
