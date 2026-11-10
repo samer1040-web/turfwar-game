@@ -156,8 +156,8 @@ export function citadelKeep(): MapDef {
       b.spawn(0, SX + x, sy, z, -Math.PI / 2);
     }
     
-    // ✅ القناص هنا: في المنتصف تماماً (داخل الدرع) ويتم نسخه للخصم تلقائياً
-    b.weaponPickup('m110', SX - 1, sy, 0);
+    // ✅ القناص هنا: في المنتصف بين الدرع ونقطة الانطلاق، ويتم نسخه للخصم تلقائياً
+    b.weaponPickup('m110', SX + 2.5, sy, 0);
 
     b.raw({ kind: 'spawnPad', team: b.team(0), ...b.at(SX - 1, 0), y: sy, rotY: b.rotation(-Math.PI / 2) });
     b.light(SX - 2, sy + 4.5, 0, b.mirroredSide ? 0xff5a4a : 0x58b6ff, 8, 20);
