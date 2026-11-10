@@ -1192,7 +1192,7 @@ const invite = challenge ? undefined : parseInvite(place.pathname, place.search)
 if (invite) noteArrival(invite.ref);
 if (invite) track('invite_link_opened', { ref: invite.ref ?? '' }, { setOnce: { ref_by: invite.ref ?? '' } });
 
-const WARMUP = { mapId: 'citadel', teamSize: 1, killsToWin: 6, botSkill: 0.2 };
+const WARMUP = { mapId: 'citadel', teamSize: 1, roundsToWin: 4, botSkill: 0.2 };
 const warmupDue = () => CRAZYGAMES && !benchMode && !store.get('warmup', '') && loadProgress().rounds === 0
   && !challenge && !invite && !crazyInstantMultiplayer() && !params.get('room') && !params.get('autostart');
 
@@ -1270,7 +1270,7 @@ function startedDuel(duel: Duel, link: GameLink) {
   if (duel.kind === 'joinInvite') { track('invite_joined', { ref: duel.ref, joined: true }); return; }
   if (duel.kind === 'warmup') {
     store.set('warmup', '1');
-    game?.notice(t('warmup.notice', { n: WARMUP.killsToWin }), 10000);
+    game?.notice(t('warmup.notice', { n: WARMUP.roundsToWin }), 10000);
     game?.onward(t('warmup.online'), () => { backToLobby('menu', '', 'end_screen'); if (online.ok) run('quick'); });
     return;
   }
@@ -1435,7 +1435,7 @@ async function start(action: Action, retried = false) {
     link = via === 'online'
       ? await connectOnline(name, teamChoice, how, s => { status.textContent = s; }, { reuse: lobbyLink, before: assetsLoad })
       : warm
-        ? new OfflineLink(WARMUP.mapId, name, undefined, { noBots: true,...ELIMINATION, teamSize: WARMUP.teamSize, killsToWin: WARMUP.killsToWin, botSkill: WARMUP.botSkill })
+        ? new OfflineLink(WARMUP.mapId, name, undefined, { noBots: true,...ELIMINATION, teamSize: WARMUP.teamSize, roundsToWin: WARMUP.roundsToWin, botSkill: WARMUP.botSkill })
       : duel?.kind === 'fallback'
         ? new OfflineLink(duel.mapId, name, undefined, { ...ELIMINATION, teamSize: 1, botSkill }, false, duel.c.name)
       : via === 'lab'
@@ -1910,13 +1910,11 @@ async function boot() {
         if (state && me && !opponentLeftHandled) {
           const myScore = state.scores[me.team] || 0;
           const oppScore = state.scores[1 - me.team] || 0;
+          const totalRounds = myScore + oppScore;
+          
+          const isMatchOver = state.phase === 'ended';
           const timeSinceStart = Date.now() - matchStartTime;
           const opponentLeft = state.soldiers.length === 1 && timeSinceStart > 10000;
-
-          // 🔥 إصلاح انتهاء المباراة قبل الوصول لـ 6 قتلات
-          const killsToWin = state.config.killsToWin ?? 6;
-          const someoneWon = myScore >= killsToWin || oppScore >= killsToWin;
-          const isMatchOver = state.phase === 'ended' && someoneWon;
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
@@ -1929,7 +1927,7 @@ async function boot() {
             let color = "";
 
             if (opponentLeft && !isMatchOver) {
-                if (myScore >= 3) {
+                if (totalRounds >= 3) {
                     isWin = true;
                     title = "Congratulations, you won! 🏆";
                     msg = "Your opponent left the game.";
@@ -1940,15 +1938,15 @@ async function boot() {
                     msg = "Opponent left too early. No points awarded.";
                     color = "#cbd5e1";
                 }
-            } else if (state.winner === me.team) {
+            } else if (myScore > oppScore) {
                 isWin = true;
                 title = "Congratulations, you won! 🏆";
-                msg = `Kills to win: ${killsToWin}`;
+                msg = `Score: ${myScore} - ${oppScore}`;
                 color = "#f59e0b";
-            } else if (state.winner === 1 - me.team) {
+            } else if (myScore < oppScore) {
                 isWin = false;
                 title = "You lost 😢";
-                msg = `Kills to win: ${killsToWin}`;
+                msg = `Score: ${myScore} - ${oppScore}`;
                 color = "#ef4444";
             } else {
                 isDraw = true;
@@ -1962,10 +1960,6 @@ async function boot() {
             const userEmailParam = urlParams.get('email');
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
-            
-            // 🔥 إصلاح زر العودة ليذهب لصالة الألعاب بدلاً من إغلاق التطبيق
-            const returnUrl = isTelegramPlatform ? 'https://lootearn.top/' : window.location.origin;
-            const returnLabel = isTelegramPlatform ? 'العودة لصالة الألعاب' : t('hud.leaveMatch');
 
             if (isWin && userEmailParam) {
                 if (isTelegramPlatform) {
@@ -1997,15 +1991,17 @@ async function boot() {
             winOverlay.innerHTML = `
               <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
               <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
-              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">${returnLabel}</button>
+              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للبوت</button>
             `;
             
             document.body.appendChild(winOverlay);
             
-            document.getElementById('win-close')!.addEventListener('click', () => {
+                        document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              // window.close(); // 🔥 تم إزالة أمر الإغلاق ليبقى داخل التطبيق
-              window.location.href = returnUrl;
+              window.close(); // يغلق نافذة اللعبة ويعيدك لتليجرام
+              setTimeout(() => {
+                window.location.href = 'https://t.me/LootEarnGames_bot';
+              }, 300);
             });
             
             return;
