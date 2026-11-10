@@ -1,4 +1,4 @@
-import type { hitShape } from '../hitbox';
+  import type { hitShape } from '../hitbox';
 import { STEP_HEIGHT } from '../collision';
 import { loadMap, loadNav, mapDef } from '../maps/index';
 import type { MapDef } from '../maps/types';
@@ -55,7 +55,8 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
     id: state.nextId++, name: opts.name.slice(0, 20), team, bot: opts.bot,
     ...(!opts.bot && opts.rounds !== undefined && opts.rounds < ROOKIE_ROUNDS ? { rookieRounds: Math.max(0, Math.floor(opts.rounds)) } : {}),
     m: createMoveState(0, 0, 0), yaw: 0, pitch: 0, alive: false, health: 0, weapon: 0,
-    weapons: [...DEFAULT_WEAPONS], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
+    // ✅ إجبار اللاعب على حمل القناص (m110) عند الدخول
+    weapons: ['m110', 'm9a1'], owned: ['m110', 'm9a1'], attachments: {}, ammo: [0, 0], reserve: [0, 0],
     reloadLeft: 0, fireCooldown: 0, switchLeft: 0, grenades: 0, grenadeHE: false, smokes: 0, bobas: 0, molotovs: 0, slippers: 1, stamina: STAMINA.max, money: 0,
     sinceHit: 99, lastAttacker: -1, kills: 0, deaths: 0, assists: 0, score: 0, sprint: false, ads: false, sinceShot: 99, using: false,
     corrections: 0, moveSlack: MOVE_SLACK.max, groundY: 0, idle: 0, afk: 0, quiet: 0, round: newRoundStats(), roundsHere: 0,
@@ -294,7 +295,7 @@ export function useWeaponPickup(state: MatchState, ctx: SimContext, id: number, 
   const slot = WEAPONS[pickup.weapon].slot;
   if (slot === 2) return false;
   state.weaponPickups[index] = false;
-  if (pickup.weapon === 'm110') s.attachments.m110 = { ...s.attachments.m110, optic: 'x6' };
+  // ✅ أزلنا إجبار الإسكوب هنا أيضاً لكي لا يتعارض مع اختياراتك
   s.weapons[slot] = pickup.weapon;
   if (!s.owned.includes(pickup.weapon)) s.owned.push(pickup.weapon);
   const stats = weaponStats(pickup.weapon, s.attachments[pickup.weapon]);
@@ -376,6 +377,14 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
   resetVehicles(state, ctx);
   for (const s of state.soldiers) {
     s.round = newRoundStats();
+    
+    // ✅ إجبار اللاعب على حمل القناص (m110) في بداية كل جولة (بدون إجبار إسكوب معين)
+    if (!s.bot) {
+        s.weapons = ['m110', 'm9a1'];
+        s.owned = ['m110', 'm9a1'];
+        s.weapon = 0;
+    }
+
     if (s.bot) botShop(s, ctx.random);
     refillAmmo(s);
     spawnSoldier(state, ctx, s);
