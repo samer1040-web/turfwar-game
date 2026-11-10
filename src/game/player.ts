@@ -1,229 +1,406 @@
-import type { Vec3 } from './math';
+import { CollisionWorld } from '../../shared/collision';
+import { clamp, cloneData, dirFromAngles, type Vec3 } from '../../shared/math';
+import { PEEK, easePeek, peekShift, peekSide, type PeekSide } from '../../shared/peek';
+import { MOVE, createMoveState, eyeHeight, isSprinting, stepMovement, type MoveEvents, type MoveInput, type MoveState } from '../../shared/movement';
+import type { Obstacle } from '../../shared/obstacles';
+import type { Soldier } from '../../shared/match/state';
+import { BOBA, DEFAULT_WEAPONS, HEALTH, RIDER_AIM, SLIPPER, STAMINA, oneHanded, pelletCone, weaponStats, type Attachments, type Slot, type WeaponDef, type WeaponId } from '../../shared/weapons';
+import { MOUSE_LOOK_RADIANS_PER_COUNT } from './input';
+import type { Input } from './input';
+import { BINOCULAR_ZOOM, adsFov, settings, isMagnified, opticFov } from './settings';
 
-export type WeaponId = 'knife' | 'mp5' | 'm4a1' | 'm1014' | 'm110' | 'm249' | 'm9a1' | 'mp7';
-export type Slot = 0 | 1 | 2;
-export type WeaponClass = 'melee' | 'pistol' | 'smg' | 'rifle' | 'shotgun' | 'sniper' | 'lmg';
-export type HitZone = 'head' | 'body' | 'legs';
+const hasSecondZoom = (w: WeaponDef) => w.class === 'sniper';
 
-interface Base {
-  id: WeaponId; name: string; model: string; slot: Slot; class: WeaponClass; price: number; auto: boolean;
-  rate: number;
-  damage: { head: number; body: number; limb: number };
-  accuracy: { hip: number; zoom: number };
-  recoil: { hip: number; zoom: number };
-  magazine: number; reserve: number; restock: number; reload: number;
-  equip: number; unequip: number;
-  zoomFov: number;
-  move: number;
-  pellets?: number;
-  reach?: number;
-  botRange: number;
-  velocity: number;
+const STEP = 1 / 120;
+const DEG = Math.PI / 180;
+
+export interface FrameResult {
+  shots: { origin: Vec3; dir: Vec3; weapon: WeaponDef }[];
+  grenade?: { origin: Vec3; dir: Vec3 };
+  smoke?: { origin: Vec3; dir: Vec3 };
+  molotov?: { origin: Vec3; dir: Vec3 };
+  slipper?: { origin: Vec3; dir: Vec3; power: number };
+  noSlipper?: boolean;
+  drink?: boolean;
+  drinkStarted?: boolean;
+  drinkRefused?: boolean;
+  reloadStarted: boolean;
+  zoomed?: boolean;
+  switched: boolean;
+  dryFire: boolean;
+  move: MoveEvents;
 }
 
-const BASE: Record<WeaponId, Base> = {
-  knife: { id: 'knife', name: 'Knife', model: 'Gun_Knife', slot: 2, class: 'melee', price: 0, auto: true, rate: 2, damage: { head: 33, body: 33, limb: 33 }, accuracy: { hip: 100, zoom: 100 }, recoil: { hip: 0, zoom: 0 }, magazine: 0, reserve: 0, restock: 0, reload: 0, equip: 0.3, unequip: 0.3, zoomFov: 70, move: 110, reach: 2.2, botRange: 1.5, velocity: 0 },
-  mp5: { id: 'mp5', name: 'MP5', model: 'Gun_MP5', slot: 0, class: 'smg', price: 0, auto: true, rate: 12, damage: { head: 30, body: 18, limb: 12 }, accuracy: { hip: 91, zoom: 94 }, recoil: { hip: 3, zoom: 1.5 }, magazine: 32, reserve: 96, restock: 16, reload: 3.1, equip: 0.6, unequip: 0.4, zoomFov: 20, move: 105, botRange: 14, velocity: 400 },
-  m4a1: { id: 'm4a1', name: 'M4A1', model: 'Gun_M4A1', slot: 0, class: 'rifle', price: 3400, auto: true, rate: 9, damage: { head: 33, body: 21, limb: 15 }, accuracy: { hip: 92, zoom: 95 }, recoil: { hip: 2.5, zoom: 1.2 }, magazine: 30, reserve: 90, restock: 15, reload: 3.1, equip: 0.7, unequip: 0.5, zoomFov: 20, move: 100, botRange: 22, velocity: 910 },
-  m1014: { id: 'm1014', name: 'M1014', model: 'Gun_M1014', slot: 0, class: 'shotgun', price: 2800, auto: false, rate: 1.5, damage: { head: 24, body: 10, limb: 8 }, accuracy: { hip: 30, zoom: 40 }, recoil: { hip: 35, zoom: 25 }, magazine: 6, reserve: 18, restock: 3, reload: 2.5, equip: 0.7, unequip: 0.5, zoomFov: 20, move: 102, pellets: 14, botRange: 7, velocity: 400 },
-  m110: { id: 'm110', name: 'M110', model: 'Gun_M110', slot: 0, class: 'sniper', price: 4000, auto: false, rate: 1.6, damage: { head: 90, body: 40, limb: 30 }, accuracy: { hip: 90, zoom: 98 }, recoil: { hip: 6, zoom: 2 }, magazine: 6, reserve: 18, restock: 3, reload: 3.1, equip: 0.7, unequip: 0.5, zoomFov: 20, move: 100, botRange: 40, velocity: 790 },
-  m249: { id: 'm249', name: 'M249', model: 'Gun_M249', slot: 0, class: 'lmg', price: 3800, auto: true, rate: 9, damage: { head: 43, body: 33, limb: 21 }, accuracy: { hip: 86, zoom: 91 }, recoil: { hip: 4, zoom: 2 }, magazine: 86, reserve: 86, restock: 43, reload: 4, equip: 1.2, unequip: 1, zoomFov: 20, move: 90, botRange: 20, velocity: 915 },
-  m9a1: { id: 'm9a1', name: 'M9A1', model: 'Gun_M9A1', slot: 1, class: 'pistol', price: 0, auto: false, rate: 13, damage: { head: 29, body: 22, limb: 15 }, accuracy: { hip: 93, zoom: 96 }, recoil: { hip: 3.5, zoom: 1.7 }, magazine: 12, reserve: 36, restock: 6, reload: 3.1, equip: 0.5, unequip: 0.4, zoomFov: 20, move: 107, botRange: 14, velocity: 375 },
-  mp7: { id: 'mp7', name: 'MP7', model: 'Gun_MP7', slot: 1, class: 'smg', price: 1800, auto: true, rate: 13, damage: { head: 18, body: 12, limb: 8 }, accuracy: { hip: 93, zoom: 96 }, recoil: { hip: 2.4, zoom: 1.3 }, magazine: 20, reserve: 60, restock: 10, reload: 2.4, equip: 0.5, unequip: 0.4, zoomFov: 20, move: 102, botRange: 12, velocity: 735 },
-};
+/**
+ * The operator you control
+ */
+export class LocalPlayer {
+  m: MoveState = createMoveState(0, 0, 0);
+  private prev = { x: 0, y: 0, z: 0, crouch: 0 };
+  private accumulator = 0;
+  yaw = 0;
+  pitch = 0;
+  team = 0;
+  slot: Slot = 0;
+  private lastSlot: Slot = 1;
+  weapons: [WeaponId, WeaponId] = [...DEFAULT_WEAPONS];
+  attachments: Partial<Record<WeaponId, Attachments>> = {};
+  ammo: [number, number] = [32, 12];
+  reserve: [number, number] = [0, 0];
+  reloadLeft = 0;
+  reloadTotal = 1;
+  switchLeft = 0;
+  fireCooldown = 0;
+  bloom = 0;
+  ads = 0;
+  grenades = 0;
+  smokes = 0;
+  molotovs = 0;
+  throwing: 'grenade' | 'smoke' | 'molotov' = 'grenade';
+  private sinceThrow = 9;
+  throwLeft = 0;
+  bobas = 0;
+  drinkLeft = 0;
+  private sinceDrink = 9;
+  slippers = 1;
+  slipperCharge = -1;
+  slipperFollow = 0;
+  private sinceSlipper = 9;
+  get windup() { return this.slipperCharge < 0 ? 0 : Math.min(1, this.slipperCharge / SLIPPER.charge); }
+  health: number = HEALTH.max;
+  stamina: number = STAMINA.max;
+  binoculars = false;
+  lean = 0;
+  peekSide: PeekSide = 0;
+  alive = false;
+  sprinting = false;
+  private sprintBlock = 0;
+  private sprintRecover = 0;
+  private triggerHeld = false;
+  private shotsInBurst = 0;
+  private sinceShot = 9;
+  private recoilDebt = 0;
+  punchPitch = 0;
+  punchYaw = 0;
+  punchVel = 0;
+  landDip = 0;
+  stepOffset = 0;
+  shake = 0;
+  bobPhase = 0;
+  sensitivity = MOUSE_LOOK_RADIANS_PER_COUNT;
+  zoomLevel: 0 | 1 = 0;
 
-export const WEAPON_IDS = Object.keys(BASE) as WeaponId[];
-// ✅ جعل القناص هو السلاح الأساسي والمسدس هو الثانوي
-export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['m110', 'm9a1'];
+  get aimFov() {
+    if (this.binoculars) return 2 * Math.atan(Math.tan(settings.fov * DEG / 2) / BINOCULAR_ZOOM) / DEG;
+    const first = adsFov(this.weapon);
+    if (!this.zoomLevel || !hasSecondZoom(this.weapon)) return first;
+    return 2 * Math.atan(Math.tan(first * DEG / 2) / 2) / DEG;
+  }
+  get sightFov() {
+    const w = this.weapon;
+    if (this.binoculars || settings.scopeMode !== 'pip' || !isMagnified(w)) return this.aimFov;
+    const lens = opticFov(w);
+    return this.zoomLevel && hasSecondZoom(w) ? 2 * Math.atan(Math.tan(lens * DEG / 2) / 2) / DEG : lens;
+  }
+  get lookScale() {
+    const matched = Math.tan(this.sightFov * DEG / 2) / Math.tan(settings.fov * DEG / 2);
+    return 1 + this.ads * (matched * settings.adsSensitivity - 1);
+  }
+  get magnification() { return Math.tan(settings.fov * DEG / 2) / Math.tan(this.aimFov * DEG / 2); }
 
-export type AttachmentCategory = 'optic' | 'muzzle' | 'laser' | 'light' | 'counter' | 'magazine' | 'stock' | 'ammo';
-export type AttachmentGroup = 'optic' | 'tactical' | 'mod' | 'ammo';
-export const ATTACHMENT_SLOTS: AttachmentCategory[] = ['optic', 'muzzle', 'laser', 'light', 'counter', 'magazine', 'stock', 'ammo'];
-export const groupOf = (c: AttachmentCategory): AttachmentGroup =>
-  c === 'optic' || c === 'ammo' ? c : c === 'magazine' || c === 'stock' ? 'mod' : 'tactical';
-export type AttachmentId =
-  | 'irons' | 'reflex' | 'holo' | 'acog' | 'x4' | 'x6'
-  | 'ammoCounter' | 'laser' | 'flashlight' | 'suppressor'
-  | 'extendedClip' | 'recoilPad'
-  | 'explosiveAmmo' | 'incendiaryAmmo';
+  statsOf(slot: Slot): WeaponDef {
+    const id = slot === 2 ? 'knife' : this.weapons[slot];
+    return weaponStats(id, this.attachments[id]);
+  }
+  get weapon(): WeaponDef { return this.statsOf(this.slot); }
+  get reloading() { return this.reloadLeft > 0; }
+  get tired() { return this.stamina <= STAMINA.tired; }
 
-interface Delta {
-  zoomFov?: number; zoomAccuracy?: number; accuracy?: number; recoil?: number; zoomRecoil?: number; move?: number;
-  magazine?: number; head?: number; body?: number; limb?: number;
-}
-export interface AttachmentDef {
-  id: AttachmentId; name: string; category: AttachmentCategory; price: number; delta: Delta;
-  per?: Partial<Record<WeaponId | WeaponClass, Delta & { price?: number }>>;
-  only?: WeaponId[]; not?: WeaponId[];
-}
-
-export const ATTACHMENTS: Record<AttachmentId, AttachmentDef> = {
-  irons: { id: 'irons', name: 'Iron Sight', category: 'optic', price: 0, delta: { zoomAccuracy: 1 } },
-  reflex: { id: 'reflex', name: 'Reflex Sight', category: 'optic', price: 800, delta: { zoomFov: -2, zoomAccuracy: 1.5, move: -1 }, per: { sniper: { zoomAccuracy: 1.4 } } },
-  holo: { id: 'holo', name: 'Holographic Sight', category: 'optic', price: 1000, delta: { zoomFov: -4, zoomAccuracy: 2, move: -1 }, per: { sniper: { zoomAccuracy: 1.6 } } },
-  acog: { id: 'acog', name: 'ACOG Scope', category: 'optic', price: 1100, delta: { zoomFov: -8, zoomAccuracy: 2.5, move: -1 }, per: { sniper: { zoomAccuracy: 1.8 }, mp5: { zoomRecoil: -0.3 } }, not: ['m9a1'] },
-  x4: { id: 'x4', name: 'Zoom x4 Scope', category: 'optic', price: 600, delta: { zoomFov: -10, zoomAccuracy: 3, move: -1 }, only: ['m9a1'] },
-  x6: { id: 'x6', name: 'Zoom x6 Scope', category: 'optic', price: 1200, delta: { zoomFov: -12, zoomAccuracy: 2, move: -2 }, only: ['m110'] },
-  ammoCounter: { id: 'ammoCounter', name: 'Ammo Counter', category: 'counter', price: 200, delta: {} },
-  laser: { id: 'laser', name: 'Laser Sight', category: 'laser', price: 800, delta: { accuracy: 1.5 } },
-  flashlight: { id: 'flashlight', name: 'Flashlight', category: 'light', price: 600, delta: { recoil: 2, zoomRecoil: 1 } },
-  suppressor: {
-    id: 'suppressor', name: 'Suppressor', category: 'muzzle', price: 1100, delta: { recoil: -1, zoomRecoil: -0.5, head: -4, body: -4, limb: -4 },
-    per: { mp7: { price: 1000, recoil: -0.5, zoomRecoil: -0.25, head: -2, body: -2, limb: -2 }, m9a1: { price: 600, recoil: -0.5, zoomRecoil: -0.25, head: -3, body: -3, limb: -3 } },
-  },
-  extendedClip: { id: 'extendedClip', name: 'Extended Clip', category: 'magazine', price: 900, delta: { magazine: 5, recoil: 0.5, move: -3 }, per: { sniper: { magazine: 1 }, shotgun: { magazine: 2 }, lmg: { magazine: 12 } } },
-  recoilPad: { id: 'recoilPad', name: 'Recoil Pad', category: 'stock', price: 1200, delta: { recoil: -1, zoomRecoil: -0.5, move: -2 }, per: { shotgun: { recoil: -10, zoomRecoil: -5 } } },
-  explosiveAmmo: {
-    id: 'explosiveAmmo', name: 'Explosive Ammo', category: 'ammo', price: 1600, delta: { head: 10, body: 3, limb: 3, magazine: -5, recoil: 1, zoomRecoil: 0.5 },
-    per: { sniper: { magazine: -2, head: 15, body: 5, limb: 5 }, shotgun: { magazine: -2, head: 5, body: 2, limb: 2 }, mp5: { magazine: -10 }, m4a1: { magazine: -10 }, lmg: { magazine: -25 } },
-  },
-  incendiaryAmmo: {
-    id: 'incendiaryAmmo', name: 'Incendiary Ammo', category: 'ammo', price: 1400, delta: { head: 3, body: 5, limb: 3, magazine: -5, recoil: 1, zoomRecoil: 0.5 },
-    per: { sniper: { magazine: -2, head: 5, body: 7, limb: 5 }, shotgun: { magazine: -2, head: 2, body: 3, limb: 2 }, mp5: { magazine: -10 }, m4a1: { magazine: -10 }, lmg: { magazine: -25 } },
-  },
-};
-export const ATTACHMENT_IDS = Object.keys(ATTACHMENTS) as AttachmentId[];
-
-export type Attachments = Partial<Record<AttachmentCategory, AttachmentId>>;
-
-export function normalizeAttachments(a: Record<string, string | undefined> = {}): Attachments {
-  const out: Attachments = {};
-  for (const id of Object.values(a)) if (id && id in ATTACHMENTS) out[ATTACHMENTS[id as AttachmentId].category] = id as AttachmentId;
-  return out;
-}
-const attachKey = (a: Attachments) => ATTACHMENT_SLOTS.map(c => a[c] ?? '').join('|');
-
-export function fitsWeapon(a: AttachmentDef, w: WeaponId) {
-  if (w === 'knife') return false;
-  if (a.only) return a.only.includes(w);
-  return !a.not?.includes(w);
-}
-export function attachmentPrice(a: AttachmentDef, w: WeaponId) {
-  return a.per?.[w]?.price ?? a.per?.[BASE[w].class]?.price ?? a.price;
-}
-
-export interface WeaponDef {
-  id: WeaponId; name: string; short: string; model: string; slot: Slot; class: WeaponClass; price: number; auto: boolean;
-  interval: number;
-  magazine: number; reserve: number; restock: number; reload: number; equipTime: number; unequipTime: number;
-  damage: { head: number; body: number; limb: number };
-  pellets: number;
-  range: number;
-  speed: number;
-  zoom: number;
-  spread: { hip: number; ads: number; moving: number; air: number; bloomPerShot: number; bloomMax: number; recovery: number };
-  recoil: { pitch: number; adsPitch: number; yaw: number; pattern: number[]; recover: number; viewPunch: number };
-  adsTime: number;
-  botRange: number;
-  velocity: number;
-  attachments: Attachments;
-  suppressed: boolean;
-}
-
-const MAGNIFICATION: Record<string, number> = { reflex: 1.45, holo: 1.6, acog: 4, x4: 4, x6: 6 };
-const IRONS: Partial<Record<WeaponClass, number>> = { pistol: 1.15, sniper: 1.5 };
-export const magnification = (c: WeaponClass, optic?: AttachmentId) =>
-  !optic || optic === 'irons' ? IRONS[c] ?? 1.3 : MAGNIFICATION[optic] ?? 1.3;
-
-function derive(b: Base, d: Required<Delta>, attachments: Attachments): WeaponDef {
-  const acc = Math.min(100, b.accuracy.hip + d.accuracy), zacc = Math.min(100, b.accuracy.zoom + d.zoomAccuracy);
-  const kick = Math.max(0, b.recoil.hip + d.recoil), zkick = Math.max(0, b.recoil.zoom + d.zoomRecoil);
-  const melee = b.class === 'melee';
-  return {
-    id: b.id, name: b.name, short: b.name, model: b.model, slot: b.slot, class: b.class, price: b.price, auto: b.auto,
-    interval: 1 / b.rate,
-    magazine: melee ? 0 : Math.max(1, b.magazine + d.magazine), reserve: b.reserve, restock: b.restock, reload: b.reload,
-    equipTime: b.equip, unequipTime: b.unequip,
-    damage: { head: Math.max(1, b.damage.head + d.head), body: Math.max(1, b.damage.body + d.body), limb: Math.max(1, b.damage.limb + d.limb) },
-    pellets: b.pellets ?? 1,
-    range: b.reach ?? (b.class === 'shotgun' ? 60 : b.class === 'sniper' ? 300 : 200),
-    speed: Math.max(0.5, (b.move + d.move) / 100),
-    zoom: melee ? 1 : 1 / magnification(b.class, attachments.optic),
-    spread: {
-      hip: (100 - acc) * (b.class === 'shotgun' ? 0.045 : 0.35), ads: (100 - zacc) * (b.class === 'shotgun' ? 0.035 : 0.25),
-      moving: melee ? 0 : 1.2, air: melee ? 0 : 3,
-      bloomPerShot: b.auto ? kick * 0.08 : kick * 0.15, bloomMax: kick * 0.8, recovery: 7,
-    },
-    recoil: { pitch: kick * 0.45, adsPitch: zkick * 0.45, yaw: kick * 0.2, pattern: [0.3, -0.35, 0.25, -0.2, 0.4, -0.15], recover: 8, viewPunch: Math.min(4, kick * 0.35) },
-    adsTime: melee ? 0.1 : b.class === 'lmg' ? 0.28 : b.class === 'sniper' ? 0.24 : b.class === 'pistol' ? 0.14 : 0.18,
-    botRange: b.botRange, velocity: b.velocity,
-    attachments, suppressed: attachments.muzzle === 'suppressor',
-  };
-}
-
-const cache = new Map<string, WeaponDef>();
-const ZERO: Required<Delta> = { zoomFov: 0, zoomAccuracy: 0, accuracy: 0, recoil: 0, zoomRecoil: 0, move: 0, magazine: 0, head: 0, body: 0, limb: 0 };
-
-export const oneHanded = (w: Pick<WeaponDef, 'class'>) => w.class === 'pistol' || w.class === 'smg';
-
-export const RIDER_AIM = { spread: 1.6, recoil: 1.3 };
-
-export function weaponStats(id: WeaponId, attachments: Attachments = {}): WeaponDef {
-  const finalAttachments = { ...attachments };
-  // إعطاء القناص إسكوب x6 افتراضي فقط إذا لم يكن هناك إسكوب آخر
-  if (id === 'm110' && !finalAttachments.optic) {
-    finalAttachments.optic = 'x6';
+  spawnFrom(s: Soldier) {
+    this.m = { ...s.m, vx: 0, vy: 0, vz: 0 };
+    this.prev = { x: s.m.x, y: s.m.y, z: s.m.z, crouch: s.m.crouch };
+    this.yaw = s.yaw; this.pitch = 0; this.team = s.team; this.slot = 0; this.lastSlot = 1;
+    this.weapons = [...s.weapons]; this.attachments = cloneData(s.attachments); this.reserve = [...s.reserve];
+    this.ammo = [this.statsOf(0).magazine, this.statsOf(1).magazine];
+    this.reloadLeft = 0; this.switchLeft = this.statsOf(0).equipTime; this.fireCooldown = 0; this.bloom = 0; this.ads = 0; this.lean = 0; this.peekSide = 0;
+    this.grenades = s.grenades; this.smokes = s.smokes; this.molotovs = s.molotovs; this.bobas = s.bobas; this.drinkLeft = 0; this.slippers = s.slippers ?? 1; this.slipperCharge = -1; this.slipperFollow = 0; this.health = s.health; this.alive = true; this.recoilDebt = 0; this.accumulator = 0;
+    this.stamina = STAMINA.max; this.binoculars = false; this.zoomLevel = 0;
   }
 
-  const key = `${id}|${attachKey(finalAttachments)}`;
-  let w = cache.get(key);
-  if (w) return w;
-  const b = BASE[id];
-  const d = { ...ZERO };
-  const fitted = { ...finalAttachments };
-  if (b.class !== 'melee') fitted.optic ??= 'irons';
-  for (const aid of Object.values(fitted)) {
-    if (!aid) continue;
-    const a = ATTACHMENTS[aid];
-    if (!fitsWeapon(a, id)) continue;
-    const over = { ...a.per?.[b.class], ...a.per?.[id] };
-    for (const k of Object.keys(ZERO) as (keyof Delta)[]) d[k] += (over[k] ?? a.delta[k] ?? 0);
-  }
-  w = derive(b, d, finalAttachments);
-  cache.set(key, w);
-  return w;
-}
-
-export const WEAPONS: Record<WeaponId, WeaponDef> = Object.fromEntries(WEAPON_IDS.map(id => [id, weaponStats(id)])) as Record<WeaponId, WeaponDef>;
-
-export const GRENADE = { price: 1000, damage: 70, radius: 22, fuse: 2.1, throwSpeed: 28 * 0.75, throwDelay: 1.5, max: 1 };
-export const HIGH_EXPLOSIVE = { price: 1500, damage: 45, radius: -6 };
-export const SMOKE = { price: 300, max: 1, fuse: 1.6, duration: 15, radius: 4.5, height: 1.6 };
-export const MOLOTOV = { price: 400, max: 1, fuse: 2.5, duration: 7, radius: 3, dps: 32, pulse: 0.25, height: 1.2 };
-export const BOBA = { price: 400, max: 1, heal: 50, drinkTime: 1.4 };
-export const SLIPPER = { charge: 0.8, minSpeed: 10, maxSpeed: 30, lift: 1.5, pickup: 1.3, catchDelay: 0.5, minDamage: 30, kill: 999, lifetime: 3600 };
-
-export const slipperDamage = (power: number) => power >= 0.999 ? SLIPPER.kill : SLIPPER.minDamage + (100 - SLIPPER.minDamage) * Math.max(0, power);
-
-export const HEALTH = { max: 100, critical: 25 };
-export const STAMINA = { max: 100, sprint: 18, sprintStart: 5, jump: 20, regen: 18, regenCrouched: 24, tired: 30 };
-export const FALL = { safe: 11, perMs: 4.5 };
-
-export function zoneDamage(w: WeaponDef, zone: HitZone) {
-  return zone === 'head' ? w.damage.head : zone === 'legs' ? w.damage.limb : w.damage.body;
-}
-
-export const pelletCone = (w: WeaponDef, ads: boolean) => ads ? w.spread.ads : w.spread.hip;
-
-export function pelletDirs(dir: Vec3, coneDeg: number, count: number): Vec3[] {
-  const len = Math.hypot(dir.x, dir.y, dir.z) || 1;
-  const f = { x: dir.x / len, y: dir.y / len, z: dir.z / len };
-  let rx = -f.z, rz = f.x;
-  const rl = Math.hypot(rx, rz);
-  if (rl < 1e-4) { rx = 1; rz = 0; } else { rx /= rl; rz /= rl; }
-  const ux = -rz * f.y, uy = rz * f.x - rx * f.z, uz = rx * f.y;
-  const out: Vec3[] = [f];
-  const inner = Math.floor((count - 1) / 3), outer = count - 1 - inner;
-  const ring = (n: number, radius: number, phase: number) => {
-    const t = Math.tan(coneDeg * radius * Math.PI / 180);
-    for (let i = 0; i < n; i++) {
-      const a = phase + i / n * Math.PI * 2, x = Math.cos(a) * t, y = Math.sin(a) * t;
-      const d = { x: f.x + rx * x + ux * y, y: f.y + uy * y, z: f.z + rz * x + uz * y };
-      const l = Math.hypot(d.x, d.y, d.z);
-      out.push({ x: d.x / l, y: d.y / l, z: d.z / l });
+  syncGear(s: Soldier) {
+    for (const i of [0, 1] as const) {
+      if (s.weapons[i] === this.weapons[i]) continue;
+      this.weapons[i] = s.weapons[i];
+      this.attachments[s.weapons[i]] = s.attachments[s.weapons[i]];
+      this.ammo[i] = this.statsOf(i).magazine;
+      this.selectSlot(i); this.switchLeft = this.statsOf(i).equipTime;
     }
-  };
-  ring(inner, 0.45, Math.PI / 2);
-  ring(outer, 1, Math.PI / 2 + Math.PI / outer);
-  return out;
+    if (JSON.stringify(s.attachments) !== JSON.stringify(this.attachments)) {
+      this.attachments = cloneData(s.attachments);
+      for (const i of [0, 1] as const) this.ammo[i] = Math.min(this.ammo[i], this.statsOf(i).magazine);
+    }
+    if (this.reloadLeft <= 0) this.reserve = [...s.reserve];
+    if (this.sinceThrow > 1.5 && this.throwLeft <= 0) { this.grenades = s.grenades; this.smokes = s.smokes; this.molotovs = s.molotovs; }
+    if (this.sinceDrink > 1.5 && this.drinkLeft <= 0) this.bobas = s.bobas;
+    if (this.sinceSlipper > 1 && this.slipperFollow <= 0) this.slippers = s.slippers ?? 1;
+    this.health = s.health;
+  }
+
+  riding = false;
+  rider = false;
+
+  usable(slot: Slot) { return (!this.rider || oneHanded(this.statsOf(slot))) && (slot !== 2 || this.slippers > 0); }
+
+  drawOneHanded(): Slot | undefined {
+    if (this.usable(this.slot)) return undefined;
+    const to: Slot = this.usable(1) ? 1 : 0;
+    this.selectSlot(to);
+    this.switchLeft = this.weapon.equipTime;
+    return to;
+  }
+
+  seat(p: Vec3, crouch: number, v: { vx: number; vy: number; vz: number }) {
+    this.m = { ...this.m, x: p.x, y: p.y, z: p.z, vx: v.vx, vy: v.vy, vz: v.vz, crouch, grounded: true, slideTime: 0, airTime: 0 };
+    this.prev = { x: p.x, y: p.y, z: p.z, crouch };
+    this.accumulator = 0; this.sprinting = false; this.landDip = 0; this.stepOffset = 0;
+  }
+
+  correct(s: Soldier) { this.m = { ...this.m, x: s.m.x, y: s.m.y, z: s.m.z, vx: 0, vy: 0, vz: 0 }; this.prev = { x: s.m.x, y: s.m.y, z: s.m.z, crouch: this.m.crouch }; }
+
+  renderPos(): Vec3 & { crouch: number } {
+    const a = this.accumulator / STEP;
+    return {
+      x: this.prev.x + (this.m.x - this.prev.x) * a, y: this.prev.y + (this.m.y - this.prev.y) * a,
+      z: this.prev.z + (this.m.z - this.prev.z) * a, crouch: this.prev.crouch + (this.m.crouch - this.prev.crouch) * a,
+    };
+  }
+
+  eye(): Vec3 {
+    const p = this.renderPos(), shift = peekShift(this.yaw, this.lean);
+    return { x: p.x + shift.x, y: p.y + eyeHeight(p) + this.stepOffset - this.landDip - Math.abs(this.lean) * PEEK.drop, z: p.z + shift.z };
+  }
+  aimDir(): Vec3 { return dirFromAngles(this.yaw, this.pitch); }
+
+  update(dt: number, input: Input | undefined, world: CollisionWorld, active: boolean, blockFire: boolean, obstacles?: readonly Obstacle[]): FrameResult {
+    const result: FrameResult = { shots: [], reloadStarted: false, switched: false, dryFire: false, move: { jumped: false, landed: 0, slideStarted: false, stepped: 0 } };
+    const can = active && this.alive && !!input;
+    
+    if (can) {
+      const look = input!.consumeLook();
+      const sens = this.sensitivity * input!.sensitivity * this.lookScale;
+      this.yaw -= look.x * sens;
+      this.pitch = clamp(this.pitch - look.y * sens, -1.48, 1.48);
+    } else input?.consumeLook();
+
+    const w = this.weapon;
+    this.sinceThrow += dt;
+    this.fireCooldown = Math.max(0, this.fireCooldown - dt);
+    this.switchLeft = Math.max(0, this.switchLeft - dt);
+    this.sprintBlock = Math.max(0, this.sprintBlock - dt);
+    this.sinceShot += dt;
+    this.bloom = Math.max(0, this.bloom - w.spread.recovery * dt * (this.sinceShot > 0.08 ? 1 : 0.25));
+    if (this.reloadLeft > 0) {
+      this.reloadLeft -= dt;
+      if (this.reloadLeft <= 0 && this.slot !== 2) {
+        const slot = this.slot;
+        this.reloadLeft = 0;
+        const take = Math.min(w.magazine - this.ammo[slot], this.reserve[slot]);
+        this.ammo[slot] += take; this.reserve[slot] -= take;
+      }
+    }
+
+    const wantsFire = can && input!.fire && !blockFire && !this.binoculars;
+    if (wantsFire) this.sprintBlock = 0.2;
+    const sprintKey = can && input!.down('sprint');
+    const canSprint = this.sprinting ? this.stamina > 0 : this.stamina > STAMINA.tired + STAMINA.sprintStart;
+    const jumpKey = can && input!.down('jump') && this.stamina >= STAMINA.jump;
+    const moveInput: MoveInput = can ? {
+      forward: input!.amount('forward') - input!.amount('back'),
+      strafe: input!.amount('right') - input!.amount('left'),
+      yaw: this.yaw, jump: jumpKey, crouch: input!.down('crouch'),
+      sprint: sprintKey && canSprint && this.sprintBlock <= 0,
+      ads: (input!.aim && w.class !== 'melee' && this.reloadLeft <= 0 && this.switchLeft < 0.1 && !this.rider) || this.binoculars,
+      speed: w.speed * (this.tired ? 0.8 : 1) * (this.slipperCharge >= 0 ? 0.75 : 1),
+    } : { forward: 0, strafe: 0, yaw: this.yaw, jump: false, crouch: false, sprint: false, ads: false };
+    
+    if (this.frozen || this.using) { moveInput.forward = moveInput.strafe = 0; moveInput.jump = moveInput.sprint = false; }
+    const wasSprinting = this.sprinting;
+    if (this.alive && !this.riding) {
+      this.accumulator += Math.min(dt, 0.1);
+      while (this.accumulator >= STEP) {
+        this.prev = { x: this.m.x, y: this.m.y, z: this.m.z, crouch: this.m.crouch };
+        const e = stepMovement(world, this.m, moveInput, STEP, this.team, obstacles);
+        result.move.jumped ||= e.jumped; result.move.slideStarted ||= e.slideStarted;
+        result.move.landed = Math.max(result.move.landed, e.landed); result.move.stepped += e.stepped;
+        this.accumulator -= STEP;
+      }
+    }
+    this.sprinting = this.alive && !this.riding && isSprinting(this.m, moveInput) && this.m.grounded;
+    if (result.move.jumped) this.stamina = Math.max(0, this.stamina - STAMINA.jump);
+    if (this.sprinting && !wasSprinting) this.stamina = Math.max(0, this.stamina - STAMINA.sprintStart);
+    this.stamina = clamp(this.stamina + (this.sprinting ? -STAMINA.sprint : this.m.crouch > 0.5 ? STAMINA.regenCrouched : STAMINA.regen) * dt, 0, STAMINA.max);
+    this.sprintRecover = this.sprinting ? 0.14 : Math.max(0, this.sprintRecover - dt);
+    const adsTarget = moveInput.ads && !this.sprinting && this.alive ? 1 : 0;
+    this.ads = clamp(this.ads + Math.sign(adsTarget - this.ads) * dt / w.adsTime, 0, 1);
+    if (this.ads < 0.3) this.zoomLevel = 0;
+    const aiming = this.alive && !this.riding && this.ads > 0.5;
+    this.peekSide = aiming ? peekSide(world, this.m.x, this.m.y, this.m.z, this.m.crouch, this.yaw, this.team, this.peekSide) : 0;
+    this.lean = easePeek(this.lean, this.peekSide, dt);
+
+    if (can) {
+      const wheel = Number(input!.take('nextWeapon')) - Number(input!.take('prevWeapon'));
+      const scoped = this.ads > 0.6 && hasSecondZoom(this.weapon) && !this.binoculars;
+      if (input!.take('binoculars') && !this.rider) { this.binoculars = !this.binoculars; this.zoomLevel = 0; result.zoomed = true; }
+      if (scoped && wheel !== 0) { this.zoomLevel = this.zoomLevel ? 0 : 1; result.zoomed = true; }
+      else if (this.throwLeft <= 0) {
+        let to: Slot | undefined;
+        if (input!.take('knife')) { to = 2; if (this.slippers <= 0) result.noSlipper = true; }
+        if (input!.take('secondary')) to = 1;
+        if (input!.take('primary')) to = 0;
+        if (input!.take('lastWeapon')) to = this.lastSlot;
+        if (wheel !== 0) {
+          to = this.slot;
+          for (let i = 0; i < 2; i++) { to = (((to + (wheel > 0 ? 1 : 2)) % 3) as Slot); if (this.usable(to)) break; }
+        }
+        if (to !== undefined && to !== this.slot && this.usable(to)) this.swap(to, result);
+      }
+      if (input!.take('reload')) this.startReload(result);
+      if (this.slot !== 2 && this.ammo[this.slot] <= 0 && this.switchLeft <= 0 && this.throwLeft <= 0) this.startReload(result);
+      const throwKey = input!.take('grenade');
+      if (throwKey && !this.rider && this.grenades > 0 && this.throwLeft <= 0 && this.reloadLeft <= 0) {
+        this.throwLeft = 0.32; this.grenades--; this.sinceThrow = 0; this.binoculars = false; this.throwing = 'grenade';
+      }
+      const smokeKey = input!.take('smoke');
+      if (smokeKey && !this.rider && this.smokes > 0 && this.throwLeft <= 0 && this.drinkLeft <= 0 && this.reloadLeft <= 0) {
+        this.throwLeft = 0.32; this.smokes--; this.sinceThrow = 0; this.binoculars = false; this.throwing = 'smoke';
+      }
+      const molotovKey = input!.take('molotov');
+      if (molotovKey && !this.rider && this.molotovs > 0 && this.throwLeft <= 0 && this.drinkLeft <= 0 && this.reloadLeft <= 0) {
+        this.throwLeft = 0.32; this.molotovs--; this.sinceThrow = 0; this.binoculars = false; this.throwing = 'molotov';
+      }
+      const drinkKey = input!.take('drink');
+      if (drinkKey && !this.rider && this.bobas > 0 && this.health < HEALTH.max && this.drinkLeft <= 0 && this.throwLeft <= 0 && this.reloadLeft <= 0) {
+        this.drinkLeft = BOBA.drinkTime; this.bobas--; this.sinceDrink = 0; this.binoculars = false; result.drinkStarted = true;
+      } else if (drinkKey && this.bobas > 0 && this.health >= HEALTH.max) result.drinkRefused = true;
+    }
+    
+    this.sinceSlipper += dt;
+    const windable = can && this.slot === 2 && this.slippers > 0 && !this.rider && this.switchLeft <= 0 && this.throwLeft <= 0 && this.drinkLeft <= 0 && this.slipperFollow <= 0 && !this.frozen;
+    if (windable && input!.aim) this.slipperCharge = Math.max(0, this.slipperCharge) + dt;
+    else if (windable && this.slipperCharge >= 0) {
+      result.slipper = { origin: this.eye(), dir: dirFromAngles(this.yaw, this.pitch), power: this.windup };
+      this.slippers = 0; this.slipperCharge = -1; this.slipperFollow = 0.22; this.sinceSlipper = 0;
+    } else this.slipperCharge = -1;
+    if (this.slipperFollow > 0) {
+      this.slipperFollow -= dt;
+      if (this.slipperFollow <= 0 && this.slot === 2) this.swap(1, result);
+    }
+    this.sinceDrink += dt;
+    if (this.drinkLeft > 0) {
+      this.drinkLeft -= dt;
+      if (this.drinkLeft <= 0) result.drink = true;
+    }
+    if (this.throwLeft > 0) {
+      this.throwLeft -= dt;
+      if (this.throwLeft <= 0) result[this.throwing] = { origin: this.eye(), dir: dirFromAngles(this.yaw, this.pitch + 0.06) };
+    }
+
+    const trigger = wantsFire && !this.sprinting && this.sprintRecover <= 0 && this.throwLeft <= 0 && this.drinkLeft <= 0 && this.slipperCharge < 0 && this.slipperFollow <= 0 && this.usable(this.slot);
+    if (!trigger) { this.triggerHeld = false; this.shotsInBurst = 0; }
+    if (trigger && this.switchLeft <= 0 && this.reloadLeft <= 0 && this.fireCooldown <= 0 && (w.auto || !this.triggerHeld)) {
+      if (this.slot !== 2 && this.ammo[this.slot] <= 0) {
+        if (!this.triggerHeld) result.dryFire = true;
+        this.startReload(result);
+      } else {
+        if (this.slot !== 2) this.ammo[this.slot]--;
+        this.fireCooldown += w.interval;
+        if (this.fireCooldown < 0) this.fireCooldown = w.interval;
+        const spread = w.pellets > 1 || w.class === 'melee' ? 0 : this.currentSpread() * DEG;
+        const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * spread;
+        const dir = dirFromAngles(this.yaw + Math.cos(a) * r, this.pitch + Math.sin(a) * r);
+        result.shots.push({ origin: this.eye(), dir, weapon: w });
+        this.kick(w);
+        this.bloom = Math.min(w.spread.bloomMax, this.bloom + w.spread.bloomPerShot);
+        this.sinceShot = 0; this.shotsInBurst++;
+      }
+      this.triggerHeld = true;
+    }
+    if (this.fireCooldown < 0) this.fireCooldown = 0;
+
+    if (this.sinceShot > 0.12 && this.recoilDebt > 0) {
+      const back = Math.min(this.recoilDebt, this.recoilDebt * (1 - Math.exp(-w.recoil.recover * dt)));
+      this.pitch -= back * 0.72; this.recoilDebt -= back;
+    }
+    this.punchVel += (-this.punchPitch * 220 - this.punchVel * 22) * dt;
+    this.punchPitch += this.punchVel * dt;
+    this.punchYaw *= Math.exp(-dt * 14);
+    if (result.move.landed > 3) this.landDip = Math.min(0.32, this.landDip + result.move.landed * 0.022);
+    this.landDip *= Math.exp(-dt * 9);
+    if (result.move.stepped > 0) this.stepOffset -= result.move.stepped;
+    this.stepOffset *= Math.exp(-dt * 16);
+    this.shake *= Math.exp(-dt * 6);
+    const speed = Math.hypot(this.m.vx, this.m.vz);
+    if (this.m.grounded && this.m.slideTime <= 0) this.bobPhase += dt * speed * (this.sprinting ? 1.5 : 1.75);
+    return result;
+  }
+
+  currentSpread() {
+    const w = this.weapon;
+    if (w.pellets > 1) return pelletCone(w, this.ads > 0.5);
+    const moving = Math.hypot(this.m.vx, this.m.vz) > 1.5;
+    let s = w.spread.hip + (w.spread.ads - w.spread.hip) * this.ads;
+    if (moving) s += w.spread.moving * (1 - this.ads * 0.65);
+    if (!this.m.grounded) s += w.spread.air;
+    if (this.m.crouch > 0.5 && !moving && !this.rider) s *= 0.7;
+    if (this.rider) s += RIDER_AIM.spread;
+    return s + this.bloom * (1 - this.ads * 0.6);
+  }
+
+  private kick(w: WeaponDef) {
+    const ads = (1 - this.ads * 0.35) * (this.rider ? RIDER_AIM.recoil : 1);
+    const pitchKick = w.recoil.pitch * DEG * (0.85 + Math.random() * 0.3) * ads * (this.m.crouch > 0.5 ? 0.8 : 1);
+    const pattern = w.recoil.pattern[this.shotsInBurst % w.recoil.pattern.length];
+    const yawKick = (pattern + (Math.random() - 0.5) * 0.6) * w.recoil.yaw * DEG * ads;
+    this.pitch = Math.min(1.48, this.pitch + pitchKick);
+    this.yaw -= yawKick;
+    this.recoilDebt += pitchKick;
+    this.punchVel += w.recoil.viewPunch * 0.9;
+    this.punchYaw += (Math.random() - 0.5) * w.recoil.viewPunch * 0.01;
+  }
+
+  private selectSlot(to: Slot) {
+    if (to !== this.slot) this.lastSlot = this.slot;
+    this.slot = to;
+    this.reloadLeft = 0; this.bloom = 0; this.ads = 0; this.zoomLevel = 0; this.binoculars = false;
+  }
+
+  private swap(to: Slot, result: FrameResult) {
+    this.selectSlot(to);
+    this.switchLeft = this.weapon.equipTime;
+    result.switched = true;
+  }
+
+  startReload(result?: FrameResult) {
+    const w = this.weapon;
+    if (this.slot === 2) return;
+    if (this.reloadLeft > 0 || this.ammo[this.slot] >= w.magazine || this.switchLeft > 0 || this.reserve[this.slot] <= 0) return;
+    this.reloadLeft = this.reloadTotal = w.reload;
+    if (result) result.reloadStarted = true;
+  }
+
+  report() {
+    return {
+      x: this.m.x, y: this.m.y, z: this.m.z, vx: this.m.vx, vy: this.m.vy, vz: this.m.vz, yaw: this.yaw, pitch: this.pitch,
+      crouch: this.m.crouch, grounded: this.m.grounded, sprint: this.sprinting, ads: this.ads > 0.5, slide: this.m.slideTime > 0, weapon: this.slot,
+      use: this.using,
+    };
+  }
+
+  using = false;
+  frozen = false;
+
+  speed() { return Math.hypot(this.m.vx, this.m.vz); }
+  slideFactor() { return this.m.slideTime > 0 ? 1 : 0; }
 }
+
+export { MOVE };
