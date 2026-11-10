@@ -24,9 +24,12 @@ describe('BeGone roster', () => {
     }
   });
 
-  it('damage by zone matches BeGone (MP5 30/18/12, M110 90 to the head)', () => {
+  it('keeps the MP5 damage and gives the M110 a one-shot headshot and two-shot body kill', () => {
     expect([zoneDamage(WEAPONS.mp5, 'head'), zoneDamage(WEAPONS.mp5, 'body'), zoneDamage(WEAPONS.mp5, 'legs')]).toEqual([30, 18, 12]);
-    expect(zoneDamage(WEAPONS.m110, 'head')).toBeGreaterThanOrEqual(HEALTH.max * 0.9);
+    expect(zoneDamage(WEAPONS.m110, 'head')).toBe(HEALTH.max);
+    expect(zoneDamage(WEAPONS.m110, 'body')).toBe(HEALTH.max / 2);
+    expect(zoneDamage(weaponStats('m110', { muzzle: 'suppressor' }), 'head')).toBe(HEALTH.max);
+    expect(zoneDamage(weaponStats('m110', { muzzle: 'suppressor' }), 'body')).toBe(HEALTH.max / 2);
   });
 
   it('keeps the requested M4A1 and M110 in separate loadout slots', () => {
@@ -62,6 +65,9 @@ describe('attachments', () => {
     }
     for (const a of Object.values(ATTACHMENTS).filter(a => a.category === 'optic')) {
       expect(a.price, a.id).toBe(0);
+    }
+    for (const id of ['reflex', 'holo', 'acog', 'x4', 'x6'] as const) {
+      expect(WEAPON_IDS.filter(w => w !== 'knife').every(w => fitsWeapon(ATTACHMENTS[id], w)), id).toBe(true);
     }
   });
 

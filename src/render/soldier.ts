@@ -7,7 +7,7 @@ import { DEFAULT_SKIN, isSlipper, MILITIA_LOOKS, SWING, type KnifeSkin, type Ski
 import { dirFromAngles } from '../../shared/math';
 import { riderTwist } from '../../shared/vehicles';
 import { curlFingers, orientHand, restorePose, rotateWorld, sampleKeys, snapshotPose, solveArm, solveLimb, type Keyframe } from './rig';
-import { ATTACHMENT_SLOTS, WEAPONS, type Attachments, type WeaponId } from '../../shared/weapons';
+import { ATTACHMENT_SLOTS, WEAPONS, weaponStats, type Attachments, type WeaponId } from '../../shared/weapons';
 import { GUN_FIT, fitAttachments, vec, type Fitted } from './optics';
 import { BROOM_CHOKE } from './meme';
 
@@ -445,7 +445,8 @@ export class SoldierView {
 
   /** Show weapon `id` with `attachments` (models and fitted parts are built on first use). */
   private showGun(id: WeaponId, attachments?: Attachments) {
-    const key = `${id}|${attachKey(attachments)}`;
+    const fittedAttachments = weaponStats(id, attachments).attachments;
+    const key = `${id}|${attachKey(fittedAttachments)}`;
     if (key === this.shown) return;
     this.shown = key;
     let gun = this.guns.get(id);
@@ -457,13 +458,13 @@ export class SoldierView {
     }
     for (const [gid, g] of this.guns) g.visible = gid === id;
     let fit = this.fitted.get(key);
-    if (!fit) { fit = fitAttachments(this.assets.weapons, id, attachments, 'third'); this.fitted.set(key, fit); }
+    if (!fit) { fit = fitAttachments(this.assets.weapons, id, fittedAttachments, 'third'); this.fitted.set(key, fit); }
     this.fit?.group.removeFromParent();
     gun.add(fit.group);
     this.fit = fit;
     this.currentGun = id;
     this.muzzle.position.copy(fit.muzzle);
-    this.suppressed = attachments?.muzzle === 'suppressor';
+    this.suppressed = fittedAttachments.muzzle === 'suppressor';
   }
 
   /**

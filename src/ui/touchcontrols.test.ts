@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultLayout } from '../game/touchlayout';
 import type { ActionId } from '../game/keybinds';
-import { controlHtml, holdTouchAction, moveTouchLook, sniperScopeOptions, toggleTouchAction } from './touchcontrols';
+import { controlHtml, holdTouchAction, moveTouchLook, opticOptions, toggleTouchAction } from './touchcontrols';
 
 describe('touch control labels', () => {
   it('renders visible icon buttons instead of text-only controls', () => {
@@ -56,9 +56,9 @@ describe('touch use action', () => {
   });
 });
 
-describe('M110 touch scope selector', () => {
-  it('offers every M110 optic and marks the equipped one', () => {
-    const options = sniperScopeOptions('x6', 0, false);
+describe('touch optic selector', () => {
+  it('offers every optic on the selected gun and marks the equipped one', () => {
+    const options = opticOptions('m110', 'x6', 0, false);
 
     expect(options.map(option => option.id)).toEqual(['reflex', 'holo', 'acog', 'x4', 'x6']);
     expect(options.find(option => option.id === 'x6')).toMatchObject({ equipped: true, disabled: true });
@@ -66,10 +66,10 @@ describe('M110 touch scope selector', () => {
     expect(options.filter(option => !option.disabled).every(option => option.price === 0)).toBe(true);
   });
 
-  it('allows fitting every unmounted optic for free', () => {
-    const options = sniperScopeOptions('x6', 0, true);
+  it('offers the zoom scopes for other guns too, all for free', () => {
+    const options = opticOptions('m4a1', 'irons', 0, false);
 
-    expect(options.filter(option => !option.disabled).map(option => option.id)).toEqual(['reflex', 'holo', 'acog', 'x4']);
+    expect(options.filter(option => !option.disabled).map(option => option.id)).toEqual(['reflex', 'holo', 'acog', 'x4', 'x6']);
     expect(options.every(option => option.price === 0)).toBe(true);
   });
 });

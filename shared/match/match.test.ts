@@ -437,6 +437,23 @@ describe('server-side validation', () => {
     expect(shots).toBe(1 + Math.ceil((100 - WEAPONS.mp5.damage.body) / WEAPONS.mp5.damage.head));
   });
 
+  it('kills with one M110 headshot or two body shots', () => {
+    const headshot = duel();
+    headshot.a.weapon = 1;
+    headshot.a.switchLeft = 0;
+    expect(fireShot(headshot.state, headshot.ctx, headshot.a.id, claimAt(headshot.a, headshot.b, 'head'))).toBe(true);
+    expect(headshot.b.alive).toBe(false);
+
+    const bodyShots = duel();
+    bodyShots.a.weapon = 1;
+    bodyShots.a.switchLeft = 0;
+    expect(fireShot(bodyShots.state, bodyShots.ctx, bodyShots.a.id, claimAt(bodyShots.a, bodyShots.b, 'body'))).toBe(true);
+    expect(bodyShots.b.health).toBe(50);
+    bodyShots.a.fireCooldown = 0;
+    expect(fireShot(bodyShots.state, bodyShots.ctx, bodyShots.a.id, claimAt(bodyShots.a, bodyShots.b, 'body'))).toBe(true);
+    expect(bodyShots.b.alive).toBe(false);
+  });
+
   it('rejects claims far from the target, too fast, with an empty magazine, through walls, or during the freeze', () => {
     const { state, ctx, a, b } = duel();
     const far = claimAt(a, b); far.point = { ...far.point, y: far.point.y + 4 };
@@ -648,6 +665,8 @@ describe('store and cash', () => {
     a.money = 0;
     expect(buyAttachmentFor(state, a.id, 'm110', 'x4').ok).toBe(true);
     expect(a.attachments.m110?.optic).toBe('x4');
+    expect(buyAttachmentFor(state, a.id, 'm4a1', 'x6').ok).toBe(true);
+    expect(a.attachments.m4a1?.optic).toBe('x6');
     expect(a.money).toBe(0);
   });
 

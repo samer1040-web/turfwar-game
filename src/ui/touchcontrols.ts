@@ -1,5 +1,5 @@
 import type { Input } from '../game/input';
-import { ATTACHMENTS, attachmentPrice, fitsWeapon, type AttachmentId } from '../../shared/weapons';
+import { ATTACHMENTS, WEAPONS, attachmentPrice, fitsWeapon, type AttachmentId, type WeaponId } from '../../shared/weapons';
 import { GyroAim } from '../game/gyro';
 import type { ActionId } from '../game/keybinds';
 import { type HoldAim } from '../game/holdfire';
@@ -21,19 +21,18 @@ export interface TouchInfo {
   reloading: boolean;
   holdAim: HoldAim;
   shots: number;
-  sniperScope?: AttachmentId;
+  scopeWeapon?: WeaponId;
+  scopeOptic?: AttachmentId;
   scopeCash?: number;
   scopeFree?: boolean;
 }
 
-const SNIPER_SCOPE_IDS: AttachmentId[] = ['reflex', 'holo', 'acog', 'x4', 'x6'];
-const SNIPER_SCOPES = SNIPER_SCOPE_IDS
-  .filter(id => fitsWeapon(ATTACHMENTS[id], 'm110'));
+const OPTIC_IDS: AttachmentId[] = ['reflex', 'holo', 'acog', 'x4', 'x6'];
 
-export function sniperScopeOptions(current: AttachmentId, cash: number, free: boolean) {
-  return SNIPER_SCOPES.map(id => ({
+export function opticOptions(weapon: WeaponId, current: AttachmentId, cash: number, free: boolean) {
+  return OPTIC_IDS.filter(id => fitsWeapon(ATTACHMENTS[id], weapon)).map(id => ({
     id,
-    price: free ? 0 : attachmentPrice(ATTACHMENTS[id], 'm110'),
+    price: free ? 0 : attachmentPrice(ATTACHMENTS[id], weapon),
     equipped: current === id,
   })).map(option => ({ ...option, disabled: option.equipped || cash < option.price }));
 }
@@ -158,7 +157,7 @@ export class TouchControls {
   constructor(container: HTMLElement, private readonly input: Input, private readonly ui: {
     typeChat: (team: boolean) => void;
     say: (text: string, team: boolean) => void;
-    chooseScope: (scope: AttachmentId) => void;
+    chooseScope: (weapon: WeaponId, scope: AttachmentId) => void;
   }) {
     this.root.className = 'touch-layer';
     this.root.setAttribute('aria-label', 'Touch controls');
@@ -215,24 +214,25 @@ export class TouchControls {
   }
 
   private updateScopeMenu(info: TouchInfo) {
-    const scope = info.sniperScope;
-    this.scopeButton.hidden = !scope;
+    const weapon = info.scopeWeapon;
+    const optic = info.scopeOptic;
+    this.scopeButton.hidden = !weapon;
     this.scopeButton.textContent = t('tc.scope');
-    this.scopeButton.title = t('tc.scope.open');
+    this.scopeButton.title = weapon ? t('tc.scope.open', { weapon: WEAPONS[weapon].name }) : t('tc.scope');
     this.scopeButton.setAttribute('aria-label', this.scopeButton.title);
-    this.scopePanel.hidden = !this.scopeOpen || !scope;
-    if (!scope) this.scopeOpen = false;
-    if (!scope) return;
+    this.scopePanel.hidden = !this.scopeOpen || !weapon;
+    if (!weapon) this.scopeOpen = false;
+    if (!weapon || !optic) return;
 
     const cash = info.scopeCash ?? 0, free = !!info.scopeFree;
-    const signature = `${scope}|${cash}|${free}`;
+    const signature = `${weapon}|${optic}|${cash}|${free}`;
     if (signature === this.scopeSignature) return;
     this.scopeSignature = signature;
     this.scopePanel.replaceChildren();
 
     const header = document.createElement('header');
     const title = document.createElement('b');
-    title.textContent = t('tc.scope.title');
+    title.textContent = t('tc.scope.title', { weapon: WEAPONS[weapon].name });
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'tc-scope-close';
@@ -244,7 +244,7 @@ export class TouchControls {
     header.append(title, close);
     const list = document.createElement('div');
     list.className = 'tc-scope-options';
-    for (const option of sniperScopeOptions(scope, cash, free)) {
+    for (const option of opticOptions(weapon, optic, cash, free)) {
       const { id } = option;
       const def = ATTACHMENTS[id];
       const price = option.price;
@@ -259,7 +259,7 @@ export class TouchControls {
       state.textContent = option.equipped ? t('tc.scope.equipped') : price === 0 ? t('common.free') : `$${price.toLocaleString('en-US')}`;
       button.append(name, state);
       button.addEventListener('click', () => {
-        this.ui.chooseScope(id);
+        this.ui.chooseScope(weapon, id);
         this.scopeOpen = false;
         this.scopePanel.hidden = true;
       });
