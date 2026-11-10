@@ -156,8 +156,6 @@ export function citadelKeep(): MapDef {
       b.spawn(0, SX + x, sy, z, -Math.PI / 2);
     }
     
-    // (تم حذف القناص من الأرض لحماية اللعبة من الانهيار)
-
     b.raw({ kind: 'spawnPad', team: b.team(0), ...b.at(SX - 1, 0), y: sy, rotY: b.rotation(-Math.PI / 2) });
     b.light(SX - 2, sy + 4.5, 0, b.mirroredSide ? 0xff5a4a : 0x58b6ff, 8, 20);
     // Cover between the camp and the barbican.
@@ -208,6 +206,12 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m1014', -10.9, keepRoof, -11);
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
+
+  // ✅ الحل الجذري: نضع القناص هنا بنفس طريقة الأسلحة التي تعمل فوق السطح
+  // نستخدم إحداثيات مطلقة (X = -54 و X = 54) لكي يظهر في قاعدتك وقاعدة الخصم
+  const spawnY = b.ground(-54, 0); // حساب ارتفاع الأرض الصحيح
+  b.weaponPickup('m110', -54, spawnY, 0); // قناص قاعدتك
+  b.weaponPickup('m110', 54, spawnY, 0);  // قناص قاعدة الخصم
 
   return b.build();
 }
