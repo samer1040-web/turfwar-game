@@ -10,7 +10,7 @@ import {
   reportVehicle, resetMatch, switchWeapon, throwGrenade, tickMatch, useAmmoCrate, useWeaponPickup as applyWeaponPickup, TICK_RATE,
 } from '../../shared/match/sim';
 import {
-  AFK, ONLINE_CONFIG, PUBLIC_KILLS_TO_WIN, normalizeMatchConfig, noteAction, type BombState, type BotBrain, type MatchConfig, type MatchEvent, type MatchState, type RoundStats, type Soldier, type Team,
+  AFK, ONLINE_CONFIG, PUBLIC_ROUNDS_TO_WIN, noteAction, type BombState, type BotBrain, type MatchConfig, type MatchEvent, type MatchState, type RoundStats, type Soldier, type Team,
 } from '../../shared/match/state';
 import { ATTACHMENTS, DEFAULT_WEAPONS, STAMINA, WEAPONS, normalizeAttachments, type AttachmentId, type Attachments, type Slot, type WeaponId } from '../../shared/weapons';
 import { newRoundStats, type BuyItem } from '../../shared/match/economy';
@@ -540,7 +540,7 @@ function load(ctx: Ctx, room: number): Loaded {
     mapId: row.mapId, phase: legacy ? 'warmup' : row.phase as MatchState['phase'], phaseLeft: legacy ? ONLINE_CONFIG.warmup : clock.phaseLeft,
     time: clock.time, tick: clock.tick,
     scores: legacy ? [0, 0] : [row.score0, row.score1], soldiers, bodies, vehicles, nextId: clock.nextId,
-    winner: legacy ? -1 : row.winner as -1 | Team, config: normalizeMatchConfig(legacy ? { ...ONLINE_CONFIG } : { ...ONLINE_CONFIG, ...JSON.parse(row.configJson) }),
+    winner: legacy ? -1 : row.winner as -1 | Team, config: legacy ? { ...ONLINE_CONFIG } : { ...ONLINE_CONFIG, ...JSON.parse(row.configJson) } as MatchConfig,
     round: round.round ?? 0, roundPhase: round.roundPhase ?? 'freeze', roundClock: round.roundClock ?? 0, roundWinner: round.roundWinner ?? -1,
     lossStreak: round.lossStreak ?? [0, 0],
     lastKillTeam: round.lastKillTeam ?? -1, bomb: round.bomb ?? { site: -1, armed: false, progress: 0, by: -1 },
@@ -782,7 +782,7 @@ function hideCode(ctx: Ctx, row: MatchRow) {
 }
 
 const humansIn = (ctx: Ctx, room: number) => { let n = 0; for (const r of ctx.db.soldier.iter()) if (r.room === room && !r.bot) n++; return n; };
-const configOf = (row: MatchRow): MatchConfig => normalizeMatchConfig({ ...ONLINE_CONFIG, ...JSON.parse(row.configJson) });
+const configOf = (row: MatchRow): MatchConfig => ({ ...ONLINE_CONFIG, ...JSON.parse(row.configJson) } as MatchConfig);
 
 /** Take a player out of their room (crediting their play time); an emptied room closes. */
 function leaveRoom(ctx: Ctx, player: { identity: Identity; soldierId: number; room: number }) {
@@ -891,7 +891,7 @@ function updateRoomHour(ctx: Ctx, change: (h: RoomHour | undefined) => RoomHour)
   const hour = hourOf(micros(ctx));
   const prev = ctx.db.roomHour.hour.find(hour);
   const row = { hour, ...change(prev ?? undefined) };
-  if (prev) ctx.db.roomHour.hour.update(row); else ctx.db.roomHour.insert(row);
+  if (prev) ctx.db.roomHour.hour.update(row); else ctx.db.roomHour.hour.insert(row);
 }
 const countRoom = (ctx: Ctx, kind: 'joins' | 'leaves' | 'drops' | 'kicks') => updateRoomHour(ctx, h => countRoomEvent(h, kind));
 /** One more AFK kick this hour (`afk_hour`). */
@@ -990,7 +990,7 @@ function publicRooms(ctx: Ctx, size?: number): RoomView[] {
 /** A new public room for a filter: what it names is kept from match to match, what is "any" rotates. */
 function openFor(ctx: Ctx, filter: RoomFilter) {
   const rules = newRoomRules(filter, () => ctx.random());
-  const config: MatchConfig = { ...ONLINE_CONFIG, mode: rules.mode, teamSize: filter.size, killsToWin: PUBLIC_KILLS_TO_WIN };
+  const config: MatchConfig = { ...ONLINE_CONFIG, mode: rules.mode, teamSize: filter.size, roundsToWin: PUBLIC_ROUNDS_TO_WIN }; // اصلحنا هذا السطر
   // Only rooms opened for a specific map or mode carry the flags (older rooms simply rotate).
   if (rules.fixedMap) config.fixedMap = true;
   if (rules.fixedMode) config.fixedMode = true;
@@ -1112,7 +1112,7 @@ export const tick = spacetimedb.reducer({ onSchedule: tickTable }, { arg: tickTa
         const next = nextRoomRules(state.mapId, state.config.mode, state.config.teamSize, state.config);
         state.mapId = next.mapId;
         // Rooms opened before public matches were shortened pick that up here too.
-        state.config = { ...state.config, mode: next.mode, killsToWin: PUBLIC_KILLS_TO_WIN };
+        state.config = { ...state.config, mode: next.mode, roundsToWin: PUBLIC_ROUNDS_TO_WIN }; // اصلحنا هذا السطر
       }
       const { def, world } = loadMap(state.mapId);
       const nextSim = { ...sim, map: def, world, nav: loadNav(state.mapId) };
@@ -1195,7 +1195,7 @@ export const startRoom = spacetimedb.reducer({ name: t.string(), size: t.u8(), m
     const error = startRoomError({ size, mode, map: mapId });
     if (error) throw new SenderError(error);
     const mine = isPublic ? { code: '' } : hostCode(ctx);
-    const room = mine.room ?? openRoom(ctx, mapId, { ...ONLINE_CONFIG, ...startRoomConfig({ size, mode, map: mapId, bots, isPublic }), ...(isPublic ? { killsToWin: PUBLIC_KILLS_TO_WIN } : {}) }, mine.code);
+    const room = mine.room ?? openRoom(ctx, mapId, { ...ONLINE_CONFIG, ...startRoomConfig({ size, mode, map: mapId, bots, isPublic }), ...(isPublic ? { roundsToWin: PUBLIC_ROUNDS_TO_WIN } : {}) }, mine.code);
     enterRoom(ctx, room, name, team);
   });
 

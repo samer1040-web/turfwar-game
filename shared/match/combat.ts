@@ -112,7 +112,7 @@ export function killSoldier(state: MatchState, ctx: SimContext, victim: Soldier,
   if (killer && killer.team !== victim.team) {
     state.lastKillTeam = killer.team;
     killer.kills++;
-    const killTarget = state.config.killsToWin ?? 6;
+    const killTarget = state.config.roundsToWin ?? 6; // اصلحنا هذا السطر
     if (!state.config.practice && state.phase === 'live' && killTarget > 0 && killer.kills >= killTarget) {
       state.phase = 'ended';
       state.phaseLeft = state.config.matchOverTime;
