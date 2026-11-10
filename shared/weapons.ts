@@ -160,7 +160,10 @@ export const RIDER_AIM = { spread: 1.6, recoil: 1.3 };
 
 export function weaponStats(id: WeaponId, attachments: Attachments = {}): WeaponDef {
   const finalAttachments = { ...attachments };
-  // تم إزالة إجبار إسكوب x6 هنا لمنع تجمد اللعبة
+  // ✅ إجبار القناص على x6 لمنع التجمد
+  if (id === 'm110' && !finalAttachments.optic) {
+    finalAttachments.optic = 'x6';
+  }
 
   const key = `${id}|${attachKey(finalAttachments)}`;
   let w = cache.get(key);

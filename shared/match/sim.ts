@@ -62,8 +62,10 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
   };
   resetInventory(s);
   
+  // ✅ إجبار السيرفر على إعطاء القناص مع السكوب لمنع التجمد
   s.weapons = [...DEFAULT_WEAPONS];
   s.owned = [...DEFAULT_WEAPONS];
+  s.attachments = { m110: { optic: 'x6' } };
   s.weapon = 0;
   
   refillAmmo(s);
@@ -296,6 +298,7 @@ export function useWeaponPickup(state: MatchState, ctx: SimContext, id: number, 
     || seatOf(state, id) || !state.weaponPickups[index] || Math.abs(s.m.y - pickup.y) > WEAPON_PICKUP_HEIGHT_REACH
     || Math.hypot(s.m.x - pickup.x, s.m.z - pickup.z) > WEAPON_PICKUP_REACH) return false;
   state.weaponPickups[index] = false;
+  if (pickup.weapon === 'm110') s.attachments.m110 = { ...s.attachments.m110, optic: 'x6' };
   s.weapons[0] = pickup.weapon;
   if (!s.owned.includes(pickup.weapon)) s.owned.push(pickup.weapon);
   const stats = weaponStats(pickup.weapon, s.attachments[pickup.weapon]);
@@ -378,10 +381,11 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
   for (const s of state.soldiers) {
     s.round = newRoundStats();
     
-    // ✅ تم إزالة إجبار الإسكوب هنا لمنع التجمد
+    // ✅ إجبار اللاعب على حمل القناص (m110) مع الإسكوب (x6) في بداية كل جولة لمنع التجمد
     if (!s.bot) {
         s.weapons = [...DEFAULT_WEAPONS];
         s.owned = [...DEFAULT_WEAPONS];
+        s.attachments = { m110: { optic: 'x6' } };
         s.weapon = 0;
     }
 
