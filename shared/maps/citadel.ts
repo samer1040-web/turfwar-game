@@ -183,20 +183,20 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
 
-  // ✅ الحل الجذري: نرفع السلاح متراً واحداً فوق الأرض (+ 1.0) لكي لا يتداخل مع أي مجسم
-  const groundY = b.ground(-54, 0) + 1.0; 
+  // ✅ السلاح الآن يطفو في الهواء (نصف متر) وعلى بعد خطوتين فقط منك (SX + 3)
+  const weaponY = b.ground(-62, 0) + 1.5; 
   
-  // أسلحة قاعدة اللاعب الأول (الفريق الأول)
-  b.weaponPickup('m4a1', -54, groundY, -3);
-  b.weaponPickup('m1014', -54, groundY, 0);
-  b.weaponPickup('m249', -54, groundY, 3);
-  b.weaponPickup('m110', -54, groundY, 6);
+  // أسلحة قاعدتك
+  b.weaponPickup('m4a1', -59, weaponY, -2);
+  b.weaponPickup('m1014', -59, weaponY, 0);
+  b.weaponPickup('m249', -59, weaponY, 2);
+  b.weaponPickup('m110', -59, weaponY, 4);
 
-  // أسلحة قاعدة اللاعب الثاني (الفريق الثاني)
-  b.weaponPickup('m4a1', 54, groundY, -3);
-  b.weaponPickup('m1014', 54, groundY, 0);
-  b.weaponPickup('m249', 54, groundY, 3);
-  b.weaponPickup('m110', 54, groundY, 6);
+  // أسلحة الخصم
+  b.weaponPickup('m4a1', 59, weaponY, -2);
+  b.weaponPickup('m1014', 59, weaponY, 0);
+  b.weaponPickup('m249', 59, weaponY, 2);
+  b.weaponPickup('m110', 59, weaponY, 4);
 
   return b.build();
 }
