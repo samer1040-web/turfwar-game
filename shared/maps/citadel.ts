@@ -180,10 +180,7 @@ export function citadelKeep(): MapDef {
   const keepRoof = P + 4.55;
   b.weaponPickup('m4a1', -13.1, keepRoof, -11);
   b.weaponPickup('m1014', -10.9, keepRoof, -11);
-  b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
-  b.weaponPickup('m110', -52, b.ground(-52, 0), 0);
-  b.weaponPickup('m110', 52, b.ground(52, 0), 0);
 
   return b.build();
 }
