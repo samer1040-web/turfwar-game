@@ -33,7 +33,8 @@ const BASE: Record<WeaponId, Base> = {
 };
 
 export const WEAPON_IDS = Object.keys(BASE) as WeaponId[];
-export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['m110', 'm9a1'];
+// ✅ الاختبار: جعل السلاح الأساسي M4A1
+export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['m4a1', 'm9a1'];
 
 export type AttachmentCategory = 'optic' | 'muzzle' | 'laser' | 'light' | 'counter' | 'magazine' | 'stock' | 'ammo';
 export type AttachmentGroup = 'optic' | 'tactical' | 'mod' | 'ammo';
@@ -158,7 +159,6 @@ export const oneHanded = (w: Pick<WeaponDef, 'class'>) => w.class === 'pistol' |
 export const RIDER_AIM = { spread: 1.6, recoil: 1.3 };
 
 export function weaponStats(id: WeaponId, attachments: Attachments = {}): WeaponDef {
-  // إجبار القناص على امتلاك إسكوب x6 بشكل افتراضي
   const finalAttachments = { ...attachments };
   if (id === 'm110' && !finalAttachments.optic) {
     finalAttachments.optic = 'x6';

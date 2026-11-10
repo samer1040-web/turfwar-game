@@ -55,7 +55,7 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
     id: state.nextId++, name: opts.name.slice(0, 20), team, bot: opts.bot,
     ...(!opts.bot && opts.rounds !== undefined && opts.rounds < ROOKIE_ROUNDS ? { rookieRounds: Math.max(0, Math.floor(opts.rounds)) } : {}),
     m: createMoveState(0, 0, 0), yaw: 0, pitch: 0, alive: false, health: 0, weapon: 0,
-    weapons: ['m110', 'm9a1'], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
+    weapons: ['m4a1', 'm9a1'], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
     reloadLeft: 0, fireCooldown: 0, switchLeft: 0, grenades: 0, grenadeHE: false, smokes: 0, bobas: 0, molotovs: 0, slippers: 1, stamina: STAMINA.max, money: 0,
     sinceHit: 99, lastAttacker: -1, kills: 0, deaths: 0, assists: 0, score: 0, sprint: false, ads: false, sinceShot: 99, using: false,
     corrections: 0, moveSlack: MOVE_SLACK.max, groundY: 0, idle: 0, afk: 0, quiet: 0, round: newRoundStats(), roundsHere: 0,
@@ -131,7 +131,7 @@ export function reportState(state: MatchState, ctx: SimContext, id: number, r: C
   s.yaw = r.yaw; s.pitch = clamp(r.pitch, -1.5, 1.5);
   if (!s.alive) return true;
 
-  // ✅ إضافة شرط حماية: تجاهل سلاح العميل في أول ثانية من الجولة
+  // ✅ حماية من تجاوز العميل في أول ثانية
   const justStarted = state.roundPhase === 'freeze' && state.roundClock < 1;
 
   if (seated) {
@@ -173,7 +173,6 @@ export function reportState(state: MatchState, ctx: SimContext, id: number, r: C
   s.sprint = r.sprint; s.ads = r.ads; s.using = !!r.use;
   s.m.slideTime = r.slide ? Math.max(s.m.slideTime, 0.2) : 0;
   
-  // ✅ تطبيق شرط الحماية هنا أيضاً
   if (r.weapon !== s.weapon && !justStarted) switchWeapon(state, id, r.weapon);
   
   if (landing > FALL.safe) applyDamage(state, ctx, s, s.id, (landing - FALL.safe) * FALL.perMs, 'fall', s.m, 'fall');
@@ -376,11 +375,11 @@ export function startRound(state: MatchState, ctx: SimContext, replay = false) {
   for (const s of state.soldiers) {
     s.round = newRoundStats();
     
-    // ✅ إجبار اللاعب على حمل القناص والإسكوب في بداية كل جولة (حتى لو كان السيرفر يحتفظ بسلاح قديم)
+    // ✅ الاختبار: إجبار اللاعب على حمل M4A1 في بداية كل جولة
     if (!s.bot) {
-        s.weapons = ['m110', 'm9a1'];
-        s.owned = ['m110', 'm9a1'];
-        s.attachments = { m110: { optic: 'x6' } };
+        s.weapons = ['m4a1', 'm9a1'];
+        s.owned = ['m4a1', 'm9a1'];
+        s.attachments = {}; 
         s.weapon = 0;
     }
 
