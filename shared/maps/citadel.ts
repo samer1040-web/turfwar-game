@@ -183,20 +183,5 @@ export function citadelKeep(): MapDef {
   b.weaponPickup('m249', 10.9, keepRoof, 11);
   b.weaponPickup('mp7', 0, P + 3.6, -22);
 
-  // ✅ السلاح الآن يطفو في الهواء (نصف متر) وعلى بعد خطوتين فقط منك (SX + 3)
-  const weaponY = b.ground(-62, 0) + 1.5; 
-  
-  // أسلحة قاعدتك
-  b.weaponPickup('m4a1', -59, weaponY, -2);
-  b.weaponPickup('m1014', -59, weaponY, 0);
-  b.weaponPickup('m249', -59, weaponY, 2);
-  b.weaponPickup('m110', -59, weaponY, 4);
-
-  // أسلحة الخصم
-  b.weaponPickup('m4a1', 59, weaponY, -2);
-  b.weaponPickup('m1014', 59, weaponY, 0);
-  b.weaponPickup('m249', 59, weaponY, 2);
-  b.weaponPickup('m110', 59, weaponY, 4);
-
   return b.build();
 }

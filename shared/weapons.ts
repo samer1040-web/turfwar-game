@@ -1,40 +1,23 @@
-/**
- * BeGone's arsenal, from nplay's Weapons.json and Attachments.json (archived 2015): the exact
- * damage, fire rate, magazines, reload/equip times, accuracy, recoil, zoom FOV, movement speed and
- * prices. One documented mapping (see `derive`) turns BeGone's accuracy/recoil/zoom stats into this
- * engine's spread cones, view kick and ADS field of view, so client feel, bots and server
- * validation all read the same numbers.
- */
 import type { Vec3 } from './math';
 
 export type WeaponId = 'knife' | 'mp5' | 'm4a1' | 'm1014' | 'm110' | 'm249' | 'm9a1' | 'mp7';
-/** Inventory slot: 0 primary, 1 secondary, 2 melee. The M67 grenade is a separate tactical item. */
 export type Slot = 0 | 1 | 2;
 export type WeaponClass = 'melee' | 'pistol' | 'smg' | 'rifle' | 'shotgun' | 'sniper' | 'lmg';
 export type HitZone = 'head' | 'body' | 'legs';
 
-/** BeGone's raw per-weapon attributes. */
 interface Base {
   id: WeaponId; name: string; model: string; slot: Slot; class: WeaponClass; price: number; auto: boolean;
-  /** Shots per second. */
   rate: number;
   damage: { head: number; body: number; limb: number };
-  /** 0–100; higher is tighter. */
   accuracy: { hip: number; zoom: number };
   recoil: { hip: number; zoom: number };
   magazine: number; reserve: number; restock: number; reload: number;
-  /** Seconds to bring the weapon up / put it away. */
   equip: number; unequip: number;
-  /** BeGone camera FOV while zoomed (base 70 = no zoom). */
   zoomFov: number;
-  /** Movement speed in percent of the base run speed. */
   move: number;
   pellets?: number;
-  /** Melee reach in metres (knife only). */
   reach?: number;
-  /** Preferred fighting distance for bots (ours). */
   botRange: number;
-  /** Muzzle velocity (m/s): what tracers show (hits are instant, hitscan). */
   velocity: number;
 }
 
@@ -50,14 +33,9 @@ const BASE: Record<WeaponId, Base> = {
 };
 
 export const WEAPON_IDS = Object.keys(BASE) as WeaponId[];
-/** What every soldier carries at the start of a match: M4A1 in hand, M110 in reserve. */
-export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['m4a1', 'm110'];
+export const DEFAULT_WEAPONS: [WeaponId, WeaponId] = ['m110', 'm9a1'];
 
-// ---- Attachments ---------------------------------------------------------------------------
-
-/** Where an attachment mounts: one item per slot, so gadgets in different slots stack on one gun. */
 export type AttachmentCategory = 'optic' | 'muzzle' | 'laser' | 'light' | 'counter' | 'magazine' | 'stock' | 'ammo';
-/** Store grouping (BeGone's four attachment categories). */
 export type AttachmentGroup = 'optic' | 'tactical' | 'mod' | 'ammo';
 export const ATTACHMENT_SLOTS: AttachmentCategory[] = ['optic', 'muzzle', 'laser', 'light', 'counter', 'magazine', 'stock', 'ammo'];
 export const groupOf = (c: AttachmentCategory): AttachmentGroup =>
@@ -68,7 +46,6 @@ export type AttachmentId =
   | 'extendedClip' | 'recoilPad'
   | 'explosiveAmmo' | 'incendiaryAmmo';
 
-/** Additive stat changes; `per` overrides by weapon id or class (BeGone's CustomAttributes). */
 interface Delta {
   zoomFov?: number; zoomAccuracy?: number; accuracy?: number; recoil?: number; zoomRecoil?: number; move?: number;
   magazine?: number; head?: number; body?: number; limb?: number;
@@ -76,7 +53,6 @@ interface Delta {
 export interface AttachmentDef {
   id: AttachmentId; name: string; category: AttachmentCategory; price: number; delta: Delta;
   per?: Partial<Record<WeaponId | WeaponClass, Delta & { price?: number }>>;
-  /** Weapons that accept it (default: every firearm). */
   only?: WeaponId[]; not?: WeaponId[];
 }
 
@@ -107,10 +83,8 @@ export const ATTACHMENTS: Record<AttachmentId, AttachmentDef> = {
 };
 export const ATTACHMENT_IDS = Object.keys(ATTACHMENTS) as AttachmentId[];
 
-/** One attachment per slot on a weapon (optics default to iron sights). */
 export type Attachments = Partial<Record<AttachmentCategory, AttachmentId>>;
 
-/** Re-slot a saved attachment set (older saves grouped several gadgets under one key). */
 export function normalizeAttachments(a: Record<string, string | undefined> = {}): Attachments {
   const out: Attachments = {};
   for (const id of Object.values(a)) if (id && id in ATTACHMENTS) out[ATTACHMENTS[id as AttachmentId].category] = id as AttachmentId;
@@ -127,46 +101,29 @@ export function attachmentPrice(a: AttachmentDef, w: WeaponId) {
   return a.per?.[w]?.price ?? a.per?.[BASE[w].class]?.price ?? a.price;
 }
 
-// ---- Effective weapon ------------------------------------------------------------------------
-
 export interface WeaponDef {
   id: WeaponId; name: string; short: string; model: string; slot: Slot; class: WeaponClass; price: number; auto: boolean;
-  /** Seconds between shots. */
   interval: number;
   magazine: number; reserve: number; restock: number; reload: number; equipTime: number; unequipTime: number;
   damage: { head: number; body: number; limb: number };
   pellets: number;
-  /** Hitscan reach (melee: the knife's reach). */
   range: number;
-  /** Movement speed multiplier (1 = base run speed). */
   speed: number;
-  /** Camera FOV ratio while aiming (1 = no zoom): our ADS FOV = settings FOV × zoom. */
   zoom: number;
-  /** Cone half-angles in degrees. */
   spread: { hip: number; ads: number; moving: number; air: number; bloomPerShot: number; bloomMax: number; recovery: number };
-  /** View kick per shot (degrees) and how quickly the camera settles. */
   recoil: { pitch: number; adsPitch: number; yaw: number; pattern: number[]; recover: number; viewPunch: number };
   adsTime: number;
   botRange: number;
-  /** Muzzle velocity (m/s, real-world figure); tracers fly at a scaled-down speed so they read on screen. Hits stay hitscan. */
   velocity: number;
-  /** Attachments fitted (for visuals and the HUD). */
   attachments: Attachments;
-  /** Suppressed: no tracer or muzzle flash for others. */
   suppressed: boolean;
 }
 
-/**
- * Aiming magnification. BeGone's zoom-FOV numbers read as a 3.5× zoom even on iron sights, which hides
- * most of the screen; here iron sights barely zoom, red dot and holo a little more, and the scopes
- * keep their marked power (seen through the lens; the view around it zooms only slightly).
- */
 const MAGNIFICATION: Record<string, number> = { reflex: 1.45, holo: 1.6, acog: 4, x4: 4, x6: 6 };
 const IRONS: Partial<Record<WeaponClass, number>> = { pistol: 1.15, sniper: 1.5 };
 export const magnification = (c: WeaponClass, optic?: AttachmentId) =>
   !optic || optic === 'irons' ? IRONS[c] ?? 1.3 : MAGNIFICATION[optic] ?? 1.3;
 
-/** The documented mapping from BeGone's stats to this engine's feel (see SPEC). */
 function derive(b: Base, d: Required<Delta>, attachments: Attachments): WeaponDef {
   const acc = Math.min(100, b.accuracy.hip + d.accuracy), zacc = Math.min(100, b.accuracy.zoom + d.zoomAccuracy);
   const kick = Math.max(0, b.recoil.hip + d.recoil), zkick = Math.max(0, b.recoil.zoom + d.zoomRecoil);
@@ -182,7 +139,6 @@ function derive(b: Base, d: Required<Delta>, attachments: Attachments): WeaponDe
     speed: Math.max(0.5, (b.move + d.move) / 100),
     zoom: melee ? 1 : 1 / magnification(b.class, attachments.optic),
     spread: {
-      // Shotguns: BeGone's low accuracy numbers made a 25° pellet cone; ~3° (2° aimed) keeps them deadly up close.
       hip: (100 - acc) * (b.class === 'shotgun' ? 0.045 : 0.35), ads: (100 - zacc) * (b.class === 'shotgun' ? 0.035 : 0.25),
       moving: melee ? 0 : 1.2, air: melee ? 0 : 3,
       bloomPerShot: b.auto ? kick * 0.08 : kick * 0.15, bloomMax: kick * 0.8, recovery: 7,
@@ -197,15 +153,12 @@ function derive(b: Base, d: Required<Delta>, attachments: Attachments): WeaponDe
 const cache = new Map<string, WeaponDef>();
 const ZERO: Required<Delta> = { zoomFov: 0, zoomAccuracy: 0, accuracy: 0, recoil: 0, zoomRecoil: 0, move: 0, magazine: 0, head: 0, body: 0, limb: 0 };
 
-/** One-handed weapons (pistols and SMGs): what a scooter rider can fire while steering with the other hand. */
 export const oneHanded = (w: Pick<WeaponDef, 'class'>) => w.class === 'pistol' || w.class === 'smg';
 
-/** Firing from a moving scooter: extra spread (degrees, added to the cone) and heavier one-handed recoil. */
 export const RIDER_AIM = { spread: 1.6, recoil: 1.3 };
 
-/** Stats of `id` with its fitted attachments (cached). Iron sights count when no optic is fitted. */
 export function weaponStats(id: WeaponId, attachments: Attachments = {}): WeaponDef {
-  // ✅ إجبار القناص على امتلاك إسكوب x6 بشكل افتراضي
+  // إجبار القناص على امتلاك إسكوب x6 بشكل افتراضي
   const finalAttachments = { ...attachments };
   if (id === 'm110' && !finalAttachments.optic) {
     finalAttachments.optic = 'x6';
@@ -222,7 +175,6 @@ export function weaponStats(id: WeaponId, attachments: Attachments = {}): Weapon
     if (!aid) continue;
     const a = ATTACHMENTS[aid];
     if (!fitsWeapon(a, id)) continue;
-    // A per-weapon or per-class entry replaces the matching general values.
     const over = { ...a.per?.[b.class], ...a.per?.[id] };
     for (const k of Object.keys(ZERO) as (keyof Delta)[]) d[k] += (over[k] ?? a.delta[k] ?? 0);
   }
@@ -231,76 +183,30 @@ export function weaponStats(id: WeaponId, attachments: Attachments = {}): Weapon
   return w;
 }
 
-/** Plain stats without attachments (buy menu, bots, defaults). */
 export const WEAPONS: Record<WeaponId, WeaponDef> = Object.fromEntries(WEAPON_IDS.map(id => [id, weaponStats(id)])) as Record<WeaponId, WeaponDef>;
 
-// ---- Grenade, health, stamina, economy -------------------------------------------------------
-
-/** M67 frag ([WJ]): 70 body damage, 22 m blast radius, 2.1 s fuse, $1000, one carried, not restocked. */
 export const GRENADE = { price: 1000, damage: 70, radius: 22, fuse: 2.1, throwSpeed: 28 * 0.75, throwDelay: 1.5, max: 1 };
-/** High Explosive mod for the M67: +45 damage, −6 m radius. */
 export const HIGH_EXPLOSIVE = { price: 1500, damage: 45, radius: -6 };
-/**
- * M18 smoke grenade (not in BeGone; added 2026-10-07): $300, one carried, thrown like the M67. It
- * pops `fuse` s after the throw into a cloud that hides what is in it or behind it for `duration` s:
- * a sphere of `radius` m centred `height` m above where it landed. It blocks sight (bots' too), not bullets.
- */
 export const SMOKE = { price: 300, max: 1, fuse: 1.6, duration: 15, radius: 4.5, height: 1.6 };
-
-/**
- * 燃燒彈 molotov (not in BeGone; added 2026-10-14, after Counter-Strike's): $400, one carried, thrown
- * like the M67. The bottle bounces off walls and breaks on the first floor it lands on, spilling fire
- * over up to `radius` m of that floor (walls stop it, it does not pour over ledges) for `duration` s.
- * Whoever stands in it, enemies and the thrower but not teammates, burns for `dps` health a second (taken
- * every `pulse` s) while their feet are within `height` m of the flames. Still in the air after `fuse` s,
- * it breaks there and fizzles. Smoke puts fire out: a bottle breaking in a cloud fizzles, a smoke
- * popped by a fire smothers it, and a smoke grenade landing in the flames pops there at once.
- */
 export const MOLOTOV = { price: 400, max: 1, fuse: 2.5, duration: 7, radius: 3, dps: 32, pulse: 0.25, height: 1.2 };
-
-/**
- * 珍奶 (bubble tea; our own item, not BeGone's): bought like the M18, one carried. Drinking it takes
- * `drinkTime` (the client sips, then asks; no shooting meanwhile) and restores `heal` health up to the maximum.
- */
 export const BOBA = { price: 400, max: 1, heal: 50, drinkTime: 1.4 };
-
-/**
- * 飛拖 (our own; not in BeGone): the 藍白拖 in hand can be thrown. Hold aim with it to wind up for up
- * to `charge` s (the throw goes from `minSpeed` to `maxSpeed` m/s), let go to throw. In flight it hurts
- * the first enemy it strikes: `minDamage` thrown without a wind-up, rising with it, and only a full
- * wind-up kills outright (`kill`); the first wall or floor it touches makes it harmless. Everyone carries
- * one each round and never more: thrown, it lies where it lands until someone empty-handed walks within
- * `pickup` m of it (a fresh throw can't be caught back for `catchDelay` s); rounds clear them. No slipper, no slap.
- */
 export const SLIPPER = { charge: 0.8, minSpeed: 10, maxSpeed: 30, lift: 1.5, pickup: 1.3, catchDelay: 0.5, minDamage: 30, kill: 999, lifetime: 3600 };
 
-/** What a thrown slipper wound up to `power` (0..1) does to whoever it strikes: 30 up to 100, a kill only at full power. */
 export const slipperDamage = (power: number) => power >= 0.999 ? SLIPPER.kill : SLIPPER.minDamage + (100 - SLIPPER.minDamage) * Math.max(0, power);
 
-/** 100 HP, no armor, no regeneration within a round; below `critical` the screen desaturates. */
 export const HEALTH = { max: 100, critical: 25 };
-
-/** Stamina ([W:Stamina]): sprinting and jumping spend it; at or below `tired` you cannot sprint. */
 export const STAMINA = { max: 100, sprint: 18, sprintStart: 5, jump: 20, regen: 18, regenCrouched: 24, tired: 30 };
-
-/** Fall damage: landing faster than `safe` m/s costs `perMs` health per extra m/s (half of BeGone's 9: falls were too punishing). */
 export const FALL = { safe: 11, perMs: 4.5 };
 
 export function zoneDamage(w: WeaponDef, zone: HitZone) {
   return zone === 'head' ? w.damage.head : zone === 'legs' ? w.damage.limb : w.damage.body;
 }
 
-/** Pellet cone half-angle (degrees): fixed per stance so client and server derive the same pattern. */
 export const pelletCone = (w: WeaponDef, ads: boolean) => ads ? w.spread.ads : w.spread.hip;
 
-/**
- * Fixed pellet pattern around `dir`: one center pellet, an inner ring and an outer ring at the cone
- * edge. Deterministic (no randomness) so the server can re-trace exactly what the client fired.
- */
 export function pelletDirs(dir: Vec3, coneDeg: number, count: number): Vec3[] {
   const len = Math.hypot(dir.x, dir.y, dir.z) || 1;
   const f = { x: dir.x / len, y: dir.y / len, z: dir.z / len };
-  // Right = f × up (falls back to world X when aiming straight up or down); up = right × f.
   let rx = -f.z, rz = f.x;
   const rl = Math.hypot(rx, rz);
   if (rl < 1e-4) { rx = 1; rz = 0; } else { rx /= rl; rz /= rl; }

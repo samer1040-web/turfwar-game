@@ -24,12 +24,10 @@ export { SITE_FLOOR, TICK_RATE, onSite } from './combat';
 export { enterVehicle, exitVehicle, reportVehicle, seatOf } from './vehicles';
 export type { SimContext } from './combat';
 
-/** Metres from a bomb site's centre within which it can be armed or disarmed. */
 export const BOMB_REACH = 3.5;
-export const WEAPON_PICKUP_REACH = 15.0;
-export const WEAPON_PICKUP_HEIGHT_REACH = 10.0;
+export const WEAPON_PICKUP_REACH = 3.25;
+export const WEAPON_PICKUP_HEIGHT_REACH = 2.2;
 
-/** Build a simulation context. `withNav` is needed only where bots are simulated. */
 export function createContext(mapId: string, random: () => number, emit: (e: MatchEvent) => void, withNav = true): SimContext {
   const { def, world } = loadMap(mapId);
   return { map: def, world, nav: withNav ? loadNav(mapId) : undefined, random, emit };
@@ -45,14 +43,11 @@ export function createMatch(mapId: string, config: MatchConfig, map?: MapDef): M
   };
 }
 
-/** Sabotage needs bomb sites on the map; anywhere else the match is played as Elimination. */
 export const modeOf = (state: MatchState, map: MapDef) => state.config.mode === 'sabotage' && map.sabotage?.sites.length ? 'sabotage' : 'elimination';
 
 export { ROOKIE_ROUNDS } from './bots';
-/** A human who joins within this many seconds of a round's start deploys at once instead of waiting a round. */
 export const LATE_JOIN_SECONDS = 30;
 
-/** `rounds`: a human's career rounds (bots go easier on them under ROOKIE_ROUNDS); omit it for no easing. */
 export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: string; team?: Team; bot: boolean; rounds?: number }): Soldier {
   const counts = [0, 1].map(t => state.soldiers.filter(s => s.team === t && !s.bot).length);
   const team: Team = opts.team ?? (counts[0] <= counts[1] ? 0 : 1);
@@ -60,7 +55,7 @@ export function addSoldier(state: MatchState, ctx: SimContext, opts: { name: str
     id: state.nextId++, name: opts.name.slice(0, 20), team, bot: opts.bot,
     ...(!opts.bot && opts.rounds !== undefined && opts.rounds < ROOKIE_ROUNDS ? { rookieRounds: Math.max(0, Math.floor(opts.rounds)) } : {}),
     m: createMoveState(0, 0, 0), yaw: 0, pitch: 0, alive: false, health: 0, weapon: 0,
-    weapons: ['m4a1', 'm110'], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
+    weapons: ['m110', 'm9a1'], owned: [], attachments: {}, ammo: [0, 0], reserve: [0, 0],
     reloadLeft: 0, fireCooldown: 0, switchLeft: 0, grenades: 0, grenadeHE: false, smokes: 0, bobas: 0, molotovs: 0, slippers: 1, stamina: STAMINA.max, money: 0,
     sinceHit: 99, lastAttacker: -1, kills: 0, deaths: 0, assists: 0, score: 0, sprint: false, ads: false, sinceShot: 99, using: false,
     corrections: 0, moveSlack: MOVE_SLACK.max, groundY: 0, idle: 0, afk: 0, quiet: 0, round: newRoundStats(), roundsHere: 0,
@@ -82,10 +77,8 @@ export function removeSoldier(state: MatchState, ctx: SimContext, id: number, re
   ctx.emit({ type: 'leave', id, name: s.name, team: s.team, bot: s.bot, ...(reason ? { reason } : {}) });
 }
 
-/** Soldiers per team on this server (BeGone sizes: Duel 1, Team Duel 2, Mini 4, Medium 6, Large 8, Mega 12). */
 export const teamSizeFor = (config: MatchConfig) => config.teamSize;
 
-/** Keep both teams at the server size by adding or removing bots around the humans. */
 export function balanceTeams(state: MatchState, ctx: SimContext) {
   const size = teamSizeFor(state.config);
   for (const team of [0, 1] as Team[]) {
@@ -455,7 +448,6 @@ function checkRoundEnd(state: MatchState, ctx: SimContext) {
   else if (!alive[1]) endRound(state, ctx, 0, 'eliminated');
 }
 
-/** Elimination: time out with both teams alive is a draw (the round replays). Sabotage: SWAT holds, or the bomb blows. */
 function timeOut(state: MatchState, ctx: SimContext) {
   if (state.config.practice) { state.phaseLeft = state.config.roundTime; return; }
   
