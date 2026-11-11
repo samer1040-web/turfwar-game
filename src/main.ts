@@ -57,14 +57,12 @@ if (!CRAZYGAMES) inject();
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const params = new URLSearchParams(location.search);
 
-// 👇 اعتراض زر الرجوع في المتصفح (سهم الرجوع في الهاتف أو المتصفح) 👇
+// 👇 إصلاح زر الرجوع ليعمل بشكل مضمون 100% (تحويل قسري للموقع) 👇
 history.pushState(null, '', location.href);
 window.addEventListener('popstate', function() {
-    window.close(); // يغلق النافذة ويعود للموقع الذي فتحها
-    // كحل احتياطي في حال منع المتصفح الإغلاق التلقائي:
-    // window.location.href = 'https://lootearn.top/'; 
+    window.location.href = 'https://lootearn.top/';
 });
-// 👆 نهاية كود اعتراض زر الرجوع 👆
+// 👆 نهاية كود زر الرجوع 👆
 
 const matchId = params.get('match_id');
 if (!matchId && (params.get('autostart') || params.get('room'))) { 
@@ -1928,7 +1926,9 @@ async function boot() {
           const totalRounds = myScore + oppScore;
           
           const targetScore = state.config?.roundsToWin || 5;
-          const isMatchOver = state.phase === 'ended' || state.winner !== undefined || myScore >= targetScore || oppScore >= targetScore;
+          
+          // 👇 إصلاح شرط نهاية المباراة (إزالة الشرط الخاطئ state.winner !== undefined) 👇
+          const isMatchOver = state.phase === 'ended' || myScore >= targetScore || oppScore >= targetScore;
           const timeSinceStart = Date.now() - matchStartTime;
           const opponentLeft = state.soldiers.length <= 1 && timeSinceStart > 10000;
 
@@ -2021,12 +2021,9 @@ async function boot() {
             document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
               if (isTelegramPlatform) {
-                  window.close(); 
-                  setTimeout(() => {
-                    window.location.href = 'https://t.me/LootEarnGames_bot';
-                  }, 300);
+                  window.location.href = 'https://t.me/LootEarnGames_bot';
               } else {
-                  window.close(); // يغلق التبويب ويعيدك للموقع
+                  window.location.href = 'https://lootearn.top/';
               }
             });
             
