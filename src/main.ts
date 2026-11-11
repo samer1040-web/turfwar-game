@@ -1912,9 +1912,11 @@ async function boot() {
           const oppScore = state.scores[1 - me.team] || 0;
           const totalRounds = myScore + oppScore;
           
-          const isMatchOver = state.phase === 'ended';
+          // 👇 تعديل: جعل شرط النهاية أكثر مرونة لضمان ظهور اللافتة دائماً 👇
+          const targetScore = state.config?.roundsToWin || 5;
+          const isMatchOver = state.phase === 'ended' || state.winner !== undefined || myScore >= targetScore || oppScore >= targetScore;
           const timeSinceStart = Date.now() - matchStartTime;
-          const opponentLeft = state.soldiers.length === 1 && timeSinceStart > 10000;
+          const opponentLeft = state.soldiers.length <= 1 && timeSinceStart > 10000;
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
@@ -1976,7 +1978,6 @@ async function boot() {
                         }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
                     }
                 } else if (actualRoomCode) {
-                    // إرسال 'draw' في حالة التعادل لإرجاع النقاط، أو الإيميل في حالة الفوز
                     const winnerToSend = isWin ? userEmailParam : 'draw';
                     
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
