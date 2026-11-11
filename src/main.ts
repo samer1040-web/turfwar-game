@@ -1925,12 +1925,11 @@ async function boot() {
           const oppScore = state.scores[1 - me.team] || 0;
           const totalRounds = myScore + oppScore;
           
-          const targetScore = state.config?.roundsToWin || 5;
-          
-          // 👇 هنا تم إصلاح الشرط: state.winner != null لتحديد الفائز أو الانسحاب 👇
-          const isMatchOver = state.phase === 'ended' || state.winner != null || myScore >= targetScore || oppScore >= targetScore;
+          const targetScore = state.config?.roundsToWin || 6;
+          const isMatchOver = state.phase === 'ended' || myScore >= targetScore || oppScore >= targetScore;
           const timeSinceStart = Date.now() - matchStartTime;
-          const opponentLeft = state.soldiers.length <= 1 && timeSinceStart > 10000;
+          const activeHumans = state.soldiers.filter(s => !s.bot);
+          const opponentLeft = activeHumans.length <= 1 && timeSinceStart > 10000;
 
           if (isMatchOver || opponentLeft) {
             opponentLeftHandled = true;
@@ -1942,43 +1941,36 @@ async function boot() {
             let msg = "";
             let color = "";
 
-            if (state.winner === myId) {
-                isWin = true;
-                title = "Congratulations, you won! 🏆";
-                msg = `Score: ${myScore} - ${oppScore}`;
-                color = "#f59e0b";
-            } else if (state.winner && state.winner !== myId) {
-                isWin = false;
-                title = "You lost 😢";
-                msg = `Score: ${myScore} - ${oppScore}`;
-                color = "#ef4444";
-            } else if (opponentLeft && !isMatchOver) {
+            if (isMatchOver) {
+                // السيرفر يعلن الفريق الفائز
+                if (state.winner !== -1) {
+                    isWin = (state.winner === me.team);
+                } else {
+                    // احتياط: إذا انتهت الجولة بالسكور
+                    if (myScore > oppScore) isWin = true;
+                    else if (myScore < oppScore) isWin = false;
+                    else isDraw = true;
+                }
+            } else if (opponentLeft) {
                 if (totalRounds >= 3) {
                     isWin = true;
-                    title = "Congratulations, you won! 🏆";
-                    msg = "Your opponent left the game.";
-                    color = "#f59e0b";
                 } else {
                     isDraw = true;
-                    title = "Match Abandoned 🏳️";
-                    msg = "Opponent left too early. No points awarded.";
-                    color = "#cbd5e1";
                 }
-            } else if (myScore > oppScore) {
-                isWin = true;
+            }
+
+            if (isWin) {
                 title = "Congratulations, you won! 🏆";
                 msg = `Score: ${myScore} - ${oppScore}`;
                 color = "#f59e0b";
-            } else if (myScore < oppScore) {
-                isWin = false;
-                title = "You lost 😢";
-                msg = `Score: ${myScore} - ${oppScore}`;
-                color = "#ef4444";
-            } else {
-                isDraw = true;
+            } else if (isDraw) {
                 title = "Draw 🤝";
                 msg = `Score: ${myScore} - ${oppScore}`;
                 color = "#cbd5e1";
+            } else {
+                title = "You lost 😢";
+                msg = `Score: ${myScore} - ${oppScore}`;
+                color = "#ef4444";
             }
 
             const urlParams = new URLSearchParams(window.location.search);
@@ -1987,7 +1979,6 @@ async function boot() {
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
-            // 👇 إرسال النتيجة إلى قاعدة البيانات 👇
             if ((isWin || isDraw) && userEmailParam) {
                 if (isTelegramPlatform) {
                     if (isWin) {
