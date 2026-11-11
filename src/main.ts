@@ -1977,7 +1977,7 @@ async function boot() {
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
-            if ((isWin || isDraw) && userEmailParam) {
+                        if ((isWin || isDraw) && userEmailParam) {
                 if (isTelegramPlatform) {
                     if (isWin) {
                         fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
@@ -2001,7 +2001,10 @@ async function boot() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: winnerToSend })
-                    }).then(res => res.json()).then(data => console.log("Room points processed:", data)).catch(err => console.error(err));
+                    }).then(res => res.json()).then(data => {
+                        console.log("Room points processed:", data);
+                        if (data.error) alert("خطأ من قاعدة البيانات: " + data.error);
+                    }).catch(err => console.error(err));
                 }
             }
 
