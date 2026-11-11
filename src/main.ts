@@ -2002,7 +2002,7 @@ async function boot() {
                             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: winnerToSend })
+                        body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: winnerToSend, p_caller_email: userEmailParam })
                     }).then(res => res.json()).then(data => console.log("Room points processed:", data)).catch(err => console.error(err));
                 }
             }
