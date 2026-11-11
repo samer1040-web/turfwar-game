@@ -57,7 +57,7 @@ if (!CRAZYGAMES) inject();
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const params = new URLSearchParams(location.search);
 
-// 👇 إصلاح زر الرجوع ليعمل بشكل مضمون 100% (تحويل قسري للموقع) 👇
+// 👇 اعتراض زر الرجوع في المتصفح 👇
 history.pushState(null, '', location.href);
 window.addEventListener('popstate', function() {
     window.location.href = 'https://lootearn.top/';
@@ -1927,8 +1927,8 @@ async function boot() {
           
           const targetScore = state.config?.roundsToWin || 5;
           
-          // 👇 إصلاح شرط نهاية المباراة (إزالة الشرط الخاطئ state.winner !== undefined) 👇
-          const isMatchOver = state.phase === 'ended' || myScore >= targetScore || oppScore >= targetScore;
+          // 👇 هنا تم إصلاح الشرط: state.winner != null لتحديد الفائز أو الانسحاب 👇
+          const isMatchOver = state.phase === 'ended' || state.winner != null || myScore >= targetScore || oppScore >= targetScore;
           const timeSinceStart = Date.now() - matchStartTime;
           const opponentLeft = state.soldiers.length <= 1 && timeSinceStart > 10000;
 
@@ -1942,7 +1942,17 @@ async function boot() {
             let msg = "";
             let color = "";
 
-            if (opponentLeft && !isMatchOver) {
+            if (state.winner === myId) {
+                isWin = true;
+                title = "Congratulations, you won! 🏆";
+                msg = `Score: ${myScore} - ${oppScore}`;
+                color = "#f59e0b";
+            } else if (state.winner && state.winner !== myId) {
+                isWin = false;
+                title = "You lost 😢";
+                msg = `Score: ${myScore} - ${oppScore}`;
+                color = "#ef4444";
+            } else if (opponentLeft && !isMatchOver) {
                 if (totalRounds >= 3) {
                     isWin = true;
                     title = "Congratulations, you won! 🏆";
@@ -1977,7 +1987,8 @@ async function boot() {
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
-                        if ((isWin || isDraw) && userEmailParam) {
+            // 👇 إرسال النتيجة إلى قاعدة البيانات 👇
+            if ((isWin || isDraw) && userEmailParam) {
                 if (isTelegramPlatform) {
                     if (isWin) {
                         fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
@@ -2001,10 +2012,7 @@ async function boot() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: winnerToSend })
-                    }).then(res => res.json()).then(data => {
-                        console.log("Room points processed:", data);
-                        if (data.error) alert("خطأ من قاعدة البيانات: " + data.error);
-                    }).catch(err => console.error(err));
+                    }).then(res => res.json()).then(data => console.log("Room points processed:", data)).catch(err => console.error(err));
                 }
             }
 
