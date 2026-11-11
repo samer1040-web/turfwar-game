@@ -1961,18 +1961,24 @@ async function boot() {
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
-            if (isWin && userEmailParam) {
+            // 👇 التعديل هنا: إرسال إشارة (فوز أو تعادل) إلى قاعدة البيانات 👇
+            if ((isWin || isDraw) && userEmailParam) {
                 if (isTelegramPlatform) {
-                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
-                        method: 'POST',
-                        headers: {
-                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
-                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
-                    }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
+                    if (isWin) {
+                        fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
+                            method: 'POST',
+                            headers: {
+                                'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                                'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
+                        }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
+                    }
                 } else if (actualRoomCode) {
+                    // إرسال 'draw' في حالة التعادل لإرجاع النقاط، أو الإيميل في حالة الفوز
+                    const winnerToSend = isWin ? userEmailParam : 'draw';
+                    
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
                         method: 'POST',
                         headers: {
@@ -1980,28 +1986,34 @@ async function boot() {
                             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: userEmailParam })
-                    }).then(res => res.json()).then(data => console.log("Room points added:", data)).catch(err => console.error(err));
+                        body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: winnerToSend })
+                    }).then(res => res.json()).then(data => console.log("Room points processed:", data)).catch(err => console.error(err));
                 }
             }
 
             const winOverlay = document.createElement('div');
             winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
             
+            const btnText = isTelegramPlatform ? 'العودة للبوت' : 'العودة للموقع';
+
             winOverlay.innerHTML = `
               <h1 style="color:${color};font-size:48px;margin-bottom:20px;">${title}</h1>
               <p style="font-size:24px;color:#cbd5e1;">${msg}</p>
-              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">العودة للبوت</button>
+              <button id="win-close" style="margin-top:40px;padding:15px 60px;background:#14b8a6;border:none;border-radius:10px;font-size:20px;cursor:pointer;color:#fff;font-weight:bold;">${btnText}</button>
             `;
             
             document.body.appendChild(winOverlay);
             
-                        document.getElementById('win-close')!.addEventListener('click', () => {
+            document.getElementById('win-close')!.addEventListener('click', () => {
               winOverlay.remove();
-              window.close(); // يغلق نافذة اللعبة ويعيدك لتليجرام
-              setTimeout(() => {
-                window.location.href = 'https://t.me/LootEarnGames_bot';
-              }, 300);
+              if (isTelegramPlatform) {
+                  window.close(); 
+                  setTimeout(() => {
+                    window.location.href = 'https://t.me/LootEarnGames_bot';
+                  }, 300);
+              } else {
+                  window.close(); // يغلق التبويب ويعيدك للموقع
+              }
             });
             
             return;
