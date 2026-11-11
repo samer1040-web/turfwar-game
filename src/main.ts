@@ -56,6 +56,21 @@ if (!CRAZYGAMES) inject();
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 const params = new URLSearchParams(location.search);
+
+// 👇 اعتراض زر الرجوع في المتصفح (سهم الرجوع في الهاتف أو المتصفح) 👇
+history.pushState(null, '', location.href);
+window.addEventListener('popstate', function() {
+    window.close(); // يغلق النافذة ويعود للموقع الذي فتحها
+    // كحل احتياطي في حال منع المتصفح الإغلاق التلقائي:
+    // window.location.href = 'https://lootearn.top/'; 
+});
+// 👆 نهاية كود اعتراض زر الرجوع 👆
+
+const matchId = params.get('match_id');
+if (!matchId && (params.get('autostart') || params.get('room'))) { 
+    console.warn('missing match_id'); 
+}
+
 const store = {
   get: (k: string, d: string) => { try { return localStorage.getItem(`lawbreaker.${k}`) ?? d; } catch { return d; } },
   set: (k: string, v: string) => { try { localStorage.setItem(`lawbreaker.${k}`, v); } catch { } },
@@ -1912,7 +1927,6 @@ async function boot() {
           const oppScore = state.scores[1 - me.team] || 0;
           const totalRounds = myScore + oppScore;
           
-          // 👇 تعديل: جعل شرط النهاية أكثر مرونة لضمان ظهور اللافتة دائماً 👇
           const targetScore = state.config?.roundsToWin || 5;
           const isMatchOver = state.phase === 'ended' || state.winner !== undefined || myScore >= targetScore || oppScore >= targetScore;
           const timeSinceStart = Date.now() - matchStartTime;
@@ -1963,7 +1977,6 @@ async function boot() {
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
-            // 👇 التعديل هنا: إرسال إشارة (فوز أو تعادل) إلى قاعدة البيانات 👇
             if ((isWin || isDraw) && userEmailParam) {
                 if (isTelegramPlatform) {
                     if (isWin) {
