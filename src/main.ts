@@ -66,6 +66,7 @@ window.addEventListener('popstate', function() {
 
 const matchId = params.get('match_id');
 const matchSecret = new URLSearchParams(location.hash.slice(1)).get('s') || '';
+const is2v2 = params.get('mode') === '2v2';
 if (!matchId && (params.get('autostart') || params.get('room'))) { 
     console.warn('missing match_id'); 
 }
@@ -1548,7 +1549,10 @@ const waitStart = Date.now();
               }
           }
           
-          if (humans > 1 || (Date.now() - waitStart >= waitTimeout)) {
+          // 👇 شرط بدء المباراة في 2v2 والانتظار اللانهائي في الأكواد 👇
+          const expectedPlayers = is2v2 ? 4 : (params.get('size') === '6' ? 12 : 2);
+          
+          if (humans >= expectedPlayers || (Date.now() - waitStart >= waitTimeout)) {
               clearInterval(checkInterval);
               waitOverlay.style.display = 'none';
               privateOverlay.style.display = 'none';
@@ -1958,10 +1962,15 @@ async function boot() {
             let msg = "";
             let color = "";
 
+            // 👇 منطق الانسحاب والتعادل الجديد 👇
             const opponentReachedTarget = oppScore >= targetScore;
-
+            
             if (opponentLeft && !opponentReachedTarget) {
-                isWin = true;
+                if (totalRounds < 2) {
+                    isDraw = true; // انسحاب مبكر = تعادل (إرجاع النقاط)
+                } else {
+                    isWin = true; // انسحاب متأخر = فوز (أخذ النقاط)
+                }
             } else if (state.winner !== undefined && state.winner !== -1) {
                 isWin = (state.winner === me.team);
             } else if (myScore > oppScore) {
