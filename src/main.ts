@@ -1979,7 +1979,7 @@ async function boot() {
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
 
-            if ((isWin || isDraw) && userEmailParam) {
+                        if ((isWin || isDraw) && userEmailParam) {
                 if (isTelegramPlatform) {
                     if (isWin) {
                         fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
@@ -1992,7 +1992,7 @@ async function boot() {
                             body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
                         }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
                     }
-                } else if (actualRoomCode) {
+                } else {
                     const winnerToSend = isWin ? userEmailParam : 'draw';
                     
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
@@ -2002,11 +2002,10 @@ async function boot() {
                             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ p_room_code: actualRoomCode, p_winner_email: winnerToSend, p_caller_email: userEmailParam })
+                        body: JSON.stringify({ p_room_code: actualRoomCode || '', p_winner_email: winnerToSend, p_caller_email: userEmailParam })
                     }).then(res => res.json()).then(data => console.log("Room points processed:", data)).catch(err => console.error(err));
                 }
             }
-
             const winOverlay = document.createElement('div');
             winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
             
