@@ -2022,7 +2022,7 @@ async function boot() {
                             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
+                        body: JSON.stringify({ user_email: userEmailParam, points_amount: 3, p_secret: 'Telegram_Bot_Secret_2026_!_@#' })
                     }).then(res => res.json()).then(data => console.log("✅ Telegram 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
                 }
             } else {
