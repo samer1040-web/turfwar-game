@@ -1529,19 +1529,26 @@ async function start(action: Action, retried = false) {
 const waitStart = Date.now();
       const checkInterval = setInterval(async () => {
           const state = link.state();
-          // 👇 التعديل هنا: إزالة مؤقت الـ 20 ثانية (البوت) في المتصفح فقط 👇
+          const humans = state ? state.soldiers.filter(s => !s.bot).length : 0;
+          
           const is1v1 = params.get('size') !== '6';
           const isCreate = params.get('autostart') === 'create';
-          const isWeb = !urlParams.get('platform') === 'telegram' && !isTelegramPlatform; // التحقق مما إذا كان المتصفح
+          const isQuick = params.get('autostart') === 'quick';
           
-          let waitTimeout;
+          const isTelegramPlatform = params.get('platform') === 'telegram';
+
+          let waitTimeout = 0;
           if (isTelegramPlatform) {
-              waitTimeout = isCreate ? 20000 : (is1v1 ? 15000 : 12000); // التلجرام يبقى كما هو
+              waitTimeout = isCreate ? 20000 : (is1v1 ? 15000 : 12000);
           } else {
-              waitTimeout = Infinity; // المتصفح ينتظر للأبد (بدون بوت)
+              if (isQuick) {
+                  waitTimeout = 20000; // Play Online (Quick) = 20 seconds (Bot)
+              } else if (isCreate) {
+                  waitTimeout = 999999999; // Play via Code (Create) = Infinity (Wait for human)
+              }
           }
           
-          if ((state && state.soldiers.filter(s => !s.bot).length > 1) || (Date.now() - waitStart >= waitTimeout)) {
+          if (humans > 1 || (Date.now() - waitStart >= waitTimeout)) {
               clearInterval(checkInterval);
               waitOverlay.style.display = 'none';
               privateOverlay.style.display = 'none';
@@ -1933,7 +1940,7 @@ async function boot() {
           const totalRounds = myScore + oppScore;
           
           const targetScore = state.config?.roundsToWin || 6;
-          // 👇 إصلاح لافتة التعادل الوهمية (لا تظهر إلا إذا لعبتم أو انتهى السيرفر) 👇
+          // 👇 إصلاح لافتة التعادل الوهمية 👇
           const isMatchOver = (state.phase === 'ended' && (totalRounds > 0 || state.winner !== -1)) || myScore >= targetScore || oppScore >= targetScore;
           
           const timeSinceStart = Date.now() - matchStartTime;
@@ -1985,7 +1992,7 @@ async function boot() {
 
             if (!userEmailParam) console.warn('missing email: points not sent');
 
-            // 👇 إرسال النتيجة الجديد (حماية التلجرام + نظام السر للويب) 👇
+            // 👇 إرسال النتيجة (محصن بالكامل) 👇
             if (isTelegramPlatform) {
                 if (isWin) {
                     fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
@@ -2033,7 +2040,7 @@ async function boot() {
                     .catch(err => console.error("Fetch error:", err));
                 }
             }
-            // 👆 نهاية كود إرسال النتيجة 👆
+            // 👆 نهاية إرسال النتيجة 👆
 
             const winOverlay = document.createElement('div');
             winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
