@@ -66,7 +66,10 @@ window.addEventListener('popstate', function() {
 
 const matchId = params.get('match_id');
 const matchSecret = new URLSearchParams(location.hash.slice(1)).get('s') || '';
-const is2v2 = params.get('mode') === '2v2';
+const gameModeParam = params.get('mode') || '1v1';
+const is2v2 = gameModeParam === '2v2';
+const is6v6 = gameModeParam === '6v6';
+
 if (!matchId && (params.get('autostart') || params.get('room'))) { 
     console.warn('missing match_id'); 
 }
