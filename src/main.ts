@@ -1982,17 +1982,25 @@ async function boot() {
                 isDraw = true;
             }
 
+                        // إصلاح لافتة النصر: منع تأخر تحديث النقاط من السيرفر
+            let displayMyScore = myScore;
+            let displayOppScore = oppScore;
+            if (!opponentLeft) {
+                if (isWin && myScore > oppScore && myScore < targetScore) displayMyScore = targetScore;
+                if (!isWin && !isDraw && oppScore > myScore && oppScore < targetScore) displayOppScore = targetScore;
+            }
+
             if (isWin) {
                 title = "Congratulations, you won! 🏆";
-                msg = `Score: ${myScore} - ${oppScore}`;
+                msg = `Score: ${displayMyScore} - ${displayOppScore}`;
                 color = "#f59e0b";
             } else if (isDraw) {
                 title = "Draw 🤝";
-                msg = `Score: ${myScore} - ${oppScore}`;
+                msg = `Score: ${displayMyScore} - ${displayOppScore}`;
                 color = "#cbd5e1";
             } else {
                 title = "You lost 😢";
-                msg = `Score: ${myScore} - ${oppScore}`;
+                msg = `Score: ${displayMyScore} - ${displayOppScore}`;
                 color = "#ef4444";
             }
 
