@@ -1441,7 +1441,7 @@ async function start(action: Action, retried = false) {
   const rules = offlineRules();
   
   const how: OnlineEntry = duel?.kind === 'host' ? { kind: 'start', size: 1, mode: 'elimination', mapId: duel.mapId, bots: false, isPublic: false }
-    : duel?.kind === 'invite' ? { kind: 'start', size: duel.size ?? 6, mode: duel.mode, mapId: duel.mapId, bots: true, isPublic: false }
+    : duel?.kind === 'invite' ? { kind: 'start', size: duel.size ?? 6, mode: duel.mode, mapId: duel.mapId, bots: false, isPublic: false }
     : duel?.kind === 'join' ? { kind: 'code', code: duel.c.room! }
     : action === 'code' ? { kind: 'code', code: cleanCode(roomCode.value) }
     : action === 'room' ? { kind: 'room', room: joiningRoom }
