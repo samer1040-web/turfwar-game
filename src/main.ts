@@ -65,6 +65,7 @@ window.addEventListener('popstate', function() {
 // 👆 نهاية كود زر الرجوع 👆
 
 const matchId = params.get('match_id');
+const matchSecret = new URLSearchParams(location.hash.slice(1)).get('s') || '';
 if (!matchId && (params.get('autostart') || params.get('room'))) { 
     console.warn('missing match_id'); 
 }
@@ -1976,54 +1977,44 @@ async function boot() {
             const userEmailParam = urlParams.get('email');
             const isTelegramPlatform = urlParams.get('platform') === 'telegram';
             const actualRoomCode = game?.link.roomInfo?.()?.code || roomCodeParam;
-
-            // 👇 إرسال النتيجة مع حماية الكود من الانهيار 👇
-            if ((isWin || isDraw) && userEmailParam) {
-                if (isTelegramPlatform) {
-                    if (isWin) {
-                        fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
-                            method: 'POST',
-                            headers: {
-                                'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
-                                'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
-                        }).then(res => res.json()).then(data => console.log("✅ 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
-                    }
-                } else {
-                    const winnerToSend = isWin ? userEmailParam : 'draw';
-                    
-                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', { 
+            // 👇 إرسال النتيجة الجديد (حماية التلجرام + نظام السر للويب) 👇
+            if (isTelegramPlatform) {
+                if (isWin) {
+                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/add_game_points', { 
                         method: 'POST',
                         headers: {
-                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA', 
+                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
                             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ 
-                            p_room_code: actualRoomCode || '', 
-                            p_winner_email: winnerToSend, 
-                            p_caller_email: userEmailParam 
+                        body: JSON.stringify({ user_email: userEmailParam, points_amount: 3 })
+                    }).then(res => res.json()).then(data => console.log("✅ Telegram 3 points added:", data)).catch(err => console.error("❌ Points error:", err));
+                }
+            } else {
+                const result = isWin ? 'win' : isDraw ? 'draw' : 'loss';
+                if (!userEmailParam || !matchId || !matchSecret) {
+                    console.warn('missing email/match_id/secret: result not sent');
+                } else {
+                    fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/finish_3d_match', {
+                        method: 'POST',
+                        headers: { 
+                            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA', 
+                            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA', 
+                            'Content-Type': 'application/json' 
+                        },
+                        body: JSON.stringify({
+                            p_match_id: matchId,
+                            p_email: userEmailParam,
+                            p_secret: matchSecret,
+                            p_result: result
                         })
                     })
-                    .then(async res => {
-                        const text = await res.text(); // قراءة الرد كنص أولاً لتفادي خطأ JSON
-                        if (!text) {
-                            console.warn("الرد من قاعدة البيانات فارغ (الغرفة لم يتم العثور عليها)");
-                            return { error: "Empty response" };
-                        }
-                        try { return JSON.parse(text); } catch(e) { return { error: text }; }
-                    })
-                    .then(data => {
-                        console.log("Room points processed:", data);
-                        if (data.error) alert("خطأ في النقاط: " + data.error); // سيظهر تنبيه إذا فشلت الإضافة
-                    })
-                    .catch(err => console.error("Fetch error:", err));
+                    .then(r => r.text())
+                    .then(t => console.log('finish_3d_match response:', t))
+                    .catch(err => console.error('Fetch error:', err));
                 }
             }
             // 👆 نهاية كود إرسال النتيجة 👆
-
             const winOverlay = document.createElement('div');
             winOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;text-align:center;';
             
