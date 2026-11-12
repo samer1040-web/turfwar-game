@@ -1969,7 +1969,7 @@ async function boot() {
             const opponentReachedTarget = oppScore >= targetScore;
             
             if (opponentLeft && !opponentReachedTarget) {
-                if (totalRounds < 2) {
+                if (totalRounds === 0) {
                     isDraw = true; // انسحاب مبكر = تعادل (إرجاع النقاط)
                 } else {
                     isWin = true; // انسحاب متأخر = فوز (أخذ النقاط)
