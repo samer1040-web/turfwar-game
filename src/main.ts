@@ -1176,6 +1176,28 @@ syncOptions();
 refresh();
 watchLobbyRooms();
 track('lobby_view', {});
+// 👇 التفعيل التلقائي للتحديات الممولة 👇
+if (challengeMatchId) {
+  const autoStartInterval = setInterval(() => {
+    if (ready && !starting) {
+      clearInterval(autoStartInterval);
+      const urlRoomCode = new URLSearchParams(window.location.search).get('room');
+      
+      if (urlRoomCode) {
+        // اللاعب الثاني: انضمام تلقائي للغرفة
+        roomCode.value = urlRoomCode;
+        run('code');
+      } else {
+        // اللاعب الأول: إنشاء غرفة تلقائية
+        isPublic = false;
+        size = 'duel';
+        map = 'citadel';
+        mode = 'elimination';
+        run('start');
+      }
+    }
+  }, 500);
+}
 const idle = (fn: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 1500));
 idle(() => startAnalytics({ lang: lang(), ...serverProps() }));
 
