@@ -66,6 +66,9 @@ window.addEventListener('popstate', function() {
 
 const matchId = params.get('match_id');
 const matchSecret = new URLSearchParams(location.hash.slice(1)).get('s') || '';
+const hashParams = new URLSearchParams(location.hash.slice(1));
+const challengeMatchId = hashParams.get('match');
+const challengeToken = hashParams.get('token');
 const gameModeParam = params.get('mode') || '1v1';
 const is2v2 = gameModeParam === '2v2';
 const is6v6 = gameModeParam === '6v6';
@@ -1619,6 +1622,9 @@ function launch(link: GameLink, map: string) {
   matchStartTime = Date.now(); // 👈 تسجيل وقت بدء المباراة
   sawOpponent = false;
   game = new Game(assets, renderer, link, map, audio, app);
+  if (challengeMatchId && challengeToken) {
+    (game as any).setChallengeMatch(challengeMatchId, challengeToken);
+}
   if (link.mode === 'online') game.server = matchServer;
   if (!benchMode) game.onDuel(online.ok ? openDuelRoom : undefined);
   if (benchMode && !bench) startBench(game);

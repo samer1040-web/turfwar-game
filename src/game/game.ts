@@ -71,6 +71,13 @@ const frustum = new THREE.Frustum(), projScreen = new THREE.Matrix4(), lodSphere
 interface Remote { view: SoldierView; buffer: InterpBuffer<Sample>; pos: THREE.Vector3; crouch: number; yaw: number; pitch: number; stepDist: number; last?: THREE.Vector3; peek: number; peekSide: PeekSide }
 
 export class Game {
+    private challengeMatchId?: string;
+  private challengeToken?: string;
+
+  setChallengeMatch(matchId: string, token: string) {
+    this.challengeMatchId = matchId;
+    this.challengeToken = token;
+  }
   readonly input: Input;
   readonly player = new LocalPlayer();
   private level: LevelView;
@@ -1354,6 +1361,23 @@ export class Game {
       case 'phase': {
         if (e.phase === 'ended') {
           this.summary = this.summarize(state);
+                    // 👇 إرسال نتيجة التحدي الممول للسيرفر 👇
+          if (this.challengeMatchId && this.challengeToken) {
+            const won = e.winner === this.myTeam;
+            fetch('https://kirsjemjkstvnuqpwian.supabase.co/functions/v1/game-bridge', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer hasan1234567890@@'
+              },
+              body: JSON.stringify({
+                action: 'finish',
+                challenge_id: this.challengeMatchId,
+                token: this.challengeToken,
+                winner_id: won ? this.link.myId() : 'lost'
+              })
+            }).catch(console.error);
+          }
           if (this.challenge && this.summary) track('challenge_completed', { ref: this.challenge.ref, via: this.challenge.via, won: this.summary.result === 'win' });
           const won = e.winner === this.myTeam;
           if (!state.config.practice) this.progress({ type: 'match', won });
