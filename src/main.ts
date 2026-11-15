@@ -1304,7 +1304,7 @@ function startedDuel(duel: Duel, link: GameLink) {
       const urlParams = new URLSearchParams(window.location.search);
       const oldCode = urlParams.get('room');
 
-      if (gameCode && oldCode) {
+      if (gameCode && (oldCode || challengeMatchId)) {
         fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/update_3d_match_code', {
             method: 'POST',
             headers: {
@@ -1313,7 +1313,7 @@ function startedDuel(duel: Duel, link: GameLink) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                p_room_code: oldCode,
+                p_room_code: oldCode || challengeMatchId,
                 p_new_code: gameCode
             })
         }).then(res => res.json()).then(data => console.log("Code synced:", data)).catch(err => console.error(err));
