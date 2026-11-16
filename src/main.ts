@@ -1647,6 +1647,30 @@ function launch(link: GameLink, map: string) {
   if (challengeMatchId && challengeToken) {
     (game as any).setChallengeMatch(challengeMatchId, challengeToken);
 }
+  // 👇 إرسال كود الغرفة لقاعدة البيانات فور بدء اللعبة 👇
+  if (challengeMatchId) {
+    let tries = 0;
+    const syncRoomCode = setInterval(() => {
+      const gameCode = link.roomInfo?.()?.code;
+      if (gameCode) {
+        clearInterval(syncRoomCode);
+        fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/update_3d_match_code', {
+          method: 'POST',
+          headers: {
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            p_room_code: challengeMatchId,
+            p_new_code: gameCode
+          })
+        }).then(res => res.json()).then(data => console.log("Auto-start code synced:", data)).catch(err => console.error(err));
+      } else if (++tries > 40) {
+        clearInterval(syncRoomCode);
+      }
+    }, 250);
+  }
   if (link.mode === 'online') game.server = matchServer;
   if (!benchMode) game.onDuel(online.ok ? openDuelRoom : undefined);
   if (benchMode && !bench) startBench(game);
