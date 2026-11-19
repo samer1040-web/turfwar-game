@@ -71,7 +71,8 @@ const frustum = new THREE.Frustum(), projScreen = new THREE.Matrix4(), lodSphere
 interface Remote { view: SoldierView; buffer: InterpBuffer<Sample>; pos: THREE.Vector3; crouch: number; yaw: number; pitch: number; stepDist: number; last?: THREE.Vector3; peek: number; peekSide: PeekSide }
 
 export class Game {
-    private challengeMatchId?: string;
+      private challengeMatchId?: string;
+  private hasReportedStart = false;
   private challengeToken?: string;
 
   setChallengeMatch(matchId: string, token: string) {
@@ -1256,7 +1257,28 @@ export class Game {
         }
         break;
       }
-      case 'kill': {
+            case 'kill': {
+        // 👇 إرسال إشارة بدء المباراة لقاعدة البيانات عند أول قتل 👇
+        if (!this.hasReportedStart && this.link.mode === 'online') {
+            this.hasReportedStart = true;
+            const urlParams = new URLSearchParams(window.location.search);
+            const mId = urlParams.get('match_id');
+            const mSecret = new URLSearchParams(window.location.hash.slice(1)).get('s') || '';
+            
+            if (mId && mSecret) {
+                fetch('https://kirsjemjkstvnuqpwian.supabase.co/rest/v1/rpc/mark_match_started', {
+                    method: 'POST',
+                    headers: {
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpcnNqZW1qa3N0dm51cXB3aWFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxNTI0OTMsImV4cCI6MjEwNzcyODQ5M30.him1fOnfpPlCg6DC7dqeVRsr_aOYCmRQ3FpGqK_rygA',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ p_match_id: mId, p_secret: mSecret })
+                }).catch(err => console.error("Failed to mark match started:", err));
+            }
+        }
+        // 👆 نهاية إشارة بدء المباراة 👆
+
         const killer = find(e.killer), victim = find(e.victim);
         this.tally.kill(e, myId);
         this.hud.killfeed(killer, victim, e.weapon, e.head, e.killer === myId || e.victim === myId);
