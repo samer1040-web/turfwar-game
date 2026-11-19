@@ -1176,19 +1176,28 @@ syncOptions();
 refresh();
 watchLobbyRooms();
 track('lobby_view', {});
-// 👇 التفعيل التلقائي للتحديات الممولة 👇
-if (challengeMatchId) {
+// 👇 التفعيل التلقائي (للمباريات العادية والتحديات) 👇
+const isAutoStart = challengeMatchId || params.get('autostart') === 'create' || params.get('room');
+if (isAutoStart) {
   const autoStartInterval = setInterval(() => {
     if (ready && !starting) {
       clearInterval(autoStartInterval);
-      const urlRoomCode = new URLSearchParams(window.location.search).get('room');
+      const urlRoomCode = params.get('room');
+      const isCreate = params.get('autostart') === 'create';
       
-      if (urlRoomCode) {
-        // اللاعب الثاني: انضمام تلقائي للغرفة
+      if (isCreate) {
+        // اللاعب الأول: إنشاء غرفة تلقائية (تخطي القائمة)
+        isPublic = false;
+        size = 'duel';
+        map = 'citadel';
+        mode = 'elimination';
+        run('start');
+      } else if (urlRoomCode) {
+        // اللاعب الثاني: انضمام تلقائي للغرفة (تخطي القائمة)
         roomCode.value = urlRoomCode;
         run('code');
       } else {
-        // اللاعب الأول: إنشاء غرفة تلقائية
+        // احتياطي للتحديات القديمة
         isPublic = false;
         size = 'duel';
         map = 'citadel';
