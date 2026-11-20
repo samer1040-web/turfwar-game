@@ -1427,11 +1427,31 @@ export class Game {
         if (e.id === myId && me?.alive) { this.player.spawnFrom(me); this.shownWeapon = ''; }
         break;
       }
-      case 'leave': {
+            case 'leave': {
         const was = this.seen.get(e.id);
         this.seen.delete(e.id);
         const bot = e.bot ?? was?.bot;
-        if (e.id !== myId && bot === false) this.hud.chatNotice('chat.left', e.name, e.team ?? was?.team ?? 0);
+        if (e.id !== myId && bot === false) {
+           this.hud.chatNotice('chat.left', e.name, e.team ?? was?.team ?? 0);
+
+           // 👇 إضافة إرسال إشارة الفوز فور خروج الخصم في البطولات 👇
+           if (this.challengeMatchId && this.challengeToken && state.phase === 'live') {
+               fetch('https://kirsjemjkstvnuqpwian.supabase.co/functions/v1/game-bridge', {
+                   method: 'POST',
+                   headers: {
+                       'Content-Type': 'application/json',
+                       'Authorization': 'Bearer hasan1234567890@@'
+                   },
+                   body: JSON.stringify({
+                       action: 'finish',
+                       challenge_id: this.challengeMatchId,
+                       token: this.challengeToken,
+                       winner_id: this.link.myId() // أنت الفائز لأن الخصم خرج
+                   })
+               }).catch(err => console.error("Failed to settle challenge on leave:", err));
+           }
+           // 👆 نهاية الإضافة 👆
+        }
         break;
       }
       case 'spawn': break;
